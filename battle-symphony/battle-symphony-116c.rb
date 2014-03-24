@@ -1,7 +1,7 @@
 #==============================================================================
 # 
 # ▼ Yami Engine Symphony - Battle Symphony
-# -- Version: 1.16b (2014.02.26)
+# -- Version: 1.16c (2014.03.24)
 # -- Level: Easy, Normal, Hard, Very Hard
 # -- Requires: n/a
 # 
@@ -13,6 +13,7 @@ $imported["YES-BattleSymphony"] = true
 #==============================================================================
 # ▼ Updates
 # =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2014.03.24 - Release Build 1.16c.
 # 2014.02.26 - Release Build 1.16b.
 # 2014.01.20 - Release Build 1.16.
 # 2013.03.04 - Release Build 1.15.
@@ -1456,11 +1457,11 @@ class Scene_Battle < Scene_Base
       pose_key = @action_values[1].downcase.to_sym
     end
     #---
-    return if !$imported["BattleSymphony-HB"] || !$imported["BattleSymphony-CBS"]
+    return if !$imported["BattleSymphony-HB"] && !$imported["BattleSymphony-CBS"]
     #---
     targets.each { |target| 
       next unless target.exist?
-      next if !target.use_hb? || target.use_cbs?
+      next if !target.use_hb? && !target.use_cbs?
       target.pose = pose_key
       target.force_pose = true
     }
@@ -1602,6 +1603,27 @@ class Game_Battler < Game_BattlerBase
   def use_charset?
     return false
   end  
+  
+  #--------------------------------------------------------------------------
+  # new method: use_8d?
+  #--------------------------------------------------------------------------
+  def use_8d?
+    false
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: use_hb?
+  #--------------------------------------------------------------------------
+  def use_hb?
+    false
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: use_cbs?
+  #--------------------------------------------------------------------------
+  def use_cbs?
+    false
+  end
   
   #--------------------------------------------------------------------------
   # new method: emptyview?
@@ -1997,7 +2019,7 @@ class Sprite_Battler < Sprite_Base
   # new method: graphic_changed?
   #--------------------------------------------------------------------------
   def graphic_changed?
-    self.bitmap.nil? || @character_name != @battler.character_name ||
+    @character_name != @battler.character_name ||
     @character_index != @battler.character_index
   end
   
