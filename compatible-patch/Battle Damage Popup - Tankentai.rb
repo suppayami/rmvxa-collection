@@ -34,13 +34,31 @@ end # Game_Actor
 class Sprite_PopupLuna < Sprite
   
   #--------------------------------------------------------------------------
+  # start_effect
+  #--------------------------------------------------------------------------
+  alias tankentai_start_effect start_effect
+  def start_effect
+    tankentai_start_effect
+    start_tankentai
+  end
+  
+  #--------------------------------------------------------------------------
+  # start_tankentai
+  #--------------------------------------------------------------------------
+  def start_tankentai
+    return if disposed?
+    @base_x = self.x
+    @base_y = self.y
+  end
+  
+  #--------------------------------------------------------------------------
   # update_move
   #--------------------------------------------------------------------------
   def update_move
-    self.x += @move_x
-    self.y += @move_y
-    self.x = (self.x - $sv_camera.x) * $sv_camera.zoom
-    self.y = (self.y - $sv_camera.y) * $sv_camera.zoom
+    @base_x += @move_x
+    @base_y += @move_y
+    self.x = (@base_x - $sv_camera.x) * $sv_camera.zoom
+    self.y = (@base_y - $sv_camera.y) * $sv_camera.zoom
     @move_y += @gravity
   end
   
