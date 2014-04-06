@@ -304,6 +304,7 @@ class Game_Battler < Game_BattlerBase
       battle_luna_dp_item_apply(user, item)
     end    
     make_miss_popups(user, item)
+    make_damage_popups(user)
   end
   
   #--------------------------------------------------------------------------
@@ -330,7 +331,7 @@ class Game_Battler < Game_BattlerBase
     else
       battle_luna_dp_execute_damage(user)
     end    
-    make_damage_popups(user)
+    #make_damage_popups(user)
   end
   
   #--------------------------------------------------------------------------
@@ -343,7 +344,7 @@ class Game_Battler < Game_BattlerBase
     else
       battle_luna_dp_item_effect_recover_hp(user, item, effect)
     end    
-    make_damage_popups(user)
+    #make_damage_popups(user)
   end
   
   #--------------------------------------------------------------------------
@@ -356,7 +357,7 @@ class Game_Battler < Game_BattlerBase
     else
       battle_luna_item_effect_recover_mp(user, item, effect)
     end  
-    make_damage_popups(user)
+    #make_damage_popups(user)
   end
   
   #--------------------------------------------------------------------------
@@ -369,7 +370,7 @@ class Game_Battler < Game_BattlerBase
     else
       battle_luna_item_effect_gain_tp(user, item, effect)
     end  
-    make_damage_popups(user)
+    #make_damage_popups(user)
   end
   
   #--------------------------------------------------------------------------
