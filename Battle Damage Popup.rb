@@ -424,8 +424,43 @@ class Game_Battler < Game_BattlerBase
     return unless alive?
     make_damage_popups(self)
   end
-  
+    
 end # Game_Battler
+
+#==============================================================================
+# ■ Sprite_Battler
+#==============================================================================
+
+class Game_Actor < Game_Battler
+  
+  #--------------------------------------------------------------------------
+  # new method: screen_x
+  #--------------------------------------------------------------------------
+  unless Game_Actor.instance_methods.include?(:screen_x)
+  def screen_x
+    0
+  end
+  end
+
+  #--------------------------------------------------------------------------
+  # new method: screen_y
+  #--------------------------------------------------------------------------
+  unless Game_Actor.instance_methods.include?(:screen_y)
+  def screen_y
+    0
+  end
+  end
+
+  #--------------------------------------------------------------------------
+  # new method: screen_z
+  #--------------------------------------------------------------------------
+  unless Game_Actor.instance_methods.include?(:screen_z)
+  def screen_y
+    0
+  end
+  end
+  
+end # Game_Actor
 
 #==============================================================================
 # ■ Sprite_Battler
