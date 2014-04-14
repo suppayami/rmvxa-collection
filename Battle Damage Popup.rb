@@ -11,9 +11,11 @@ module BattleLuna
     BATTLE_POPUP = {
       # Basic Configuration.
       :basic_setting  =>  {
-        :enable     =>  true,       # Set to false to disable popup.
-        :delay      =>  6,          # Delay between each popup.
-        :no_delay   =>  [:critical, :drained, :weakpoint, :resistant, :absorbed],
+        :enable      =>  true,       # Set to false to disable popup.
+        :state_popup =>  true,       # Set to false to disable state popup.
+        :buff_popup  =>  true,       # Set to false to disable buff popup.
+        :delay       =>  6,          # Delay between each popup.
+        :no_delay    =>  [:critical, :drained, :weakpoint, :resistant, :absorbed],
       },
       
       # Configuration for words.
@@ -210,6 +212,7 @@ class Game_BattlerBase
   # new method: make_state_popup
   #--------------------------------------------------------------------------
   def make_state_popup(state_id, type)
+    return unless BattleLuna::Addon::BATTLE_POPUP[:basic_setting][:state_popup]
     state = $data_states[state_id]
     return if state.icon_index == 0
     create_popup(["#{state.name}", state.icon_index], type)
@@ -261,6 +264,7 @@ class Game_BattlerBase
   # new method: make_buff_popup
   #--------------------------------------------------------------------------
   def make_buff_popup(param_id, positive = true)
+    return unless BattleLuna::Addon::BATTLE_POPUP[:basic_setting][:buff_popup]
     return unless SceneManager.scene_is?(Scene_Battle)
     return unless alive?
     name = Vocab::param(param_id)
@@ -304,7 +308,6 @@ class Game_Battler < Game_BattlerBase
       battle_luna_dp_item_apply(user, item)
     end    
     make_miss_popups(user, item)
-    make_damage_popups(user)
   end
   
   #--------------------------------------------------------------------------
@@ -331,7 +334,7 @@ class Game_Battler < Game_BattlerBase
     else
       battle_luna_dp_execute_damage(user)
     end    
-    #make_damage_popups(user)
+    make_damage_popups(user)
   end
   
   #--------------------------------------------------------------------------
@@ -344,7 +347,7 @@ class Game_Battler < Game_BattlerBase
     else
       battle_luna_dp_item_effect_recover_hp(user, item, effect)
     end    
-    #make_damage_popups(user)
+    make_damage_popups(user)
   end
   
   #--------------------------------------------------------------------------
@@ -357,7 +360,7 @@ class Game_Battler < Game_BattlerBase
     else
       battle_luna_item_effect_recover_mp(user, item, effect)
     end  
-    #make_damage_popups(user)
+    make_damage_popups(user)
   end
   
   #--------------------------------------------------------------------------
@@ -370,7 +373,7 @@ class Game_Battler < Game_BattlerBase
     else
       battle_luna_item_effect_gain_tp(user, item, effect)
     end  
-    #make_damage_popups(user)
+    make_damage_popups(user)
   end
   
   #--------------------------------------------------------------------------
