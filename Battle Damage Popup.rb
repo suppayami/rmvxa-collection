@@ -735,17 +735,5 @@ class Window_BattleHelp < Window_Help
     update_battler_name
   end
   
-  #--------------------------------------------------------------------------
-  # alias method: update_battler_name
-  #--------------------------------------------------------------------------
-  alias battle_luna_yea_be_update_battler_name update_battler_name
-  def update_battler_name
-    return unless @actor_window
-    return unless @enemy_window
-    return unless @actor_window.active || @enemy_window.active
-    battle_luna_yea_be_update_battler_name
-    self.show
-  end
-  
 end # Window_BattleHelp
 end
