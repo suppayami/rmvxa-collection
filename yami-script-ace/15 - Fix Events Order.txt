@@ -1,0 +1,68 @@
+#==============================================================================
+# 
+# Бе Yami Engine Ace - Bugfix: Events Order
+# -- Last Updated: 2012.05.07
+# -- Level: Nothing
+# -- Requires: n/a
+# 
+#==============================================================================
+
+$imported = {} if $imported.nil?
+$imported["YSE-FixEventsOrder"] = true
+
+#==============================================================================
+# Бе Updates
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2012.05.07 - Started and Finished Script.
+# 
+#==============================================================================
+# Бе Introduction
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script fixes Events Order when you delete an event and recreate it.
+# 
+#==============================================================================
+# Бе Instructions
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# To install this script, open up your script editor and copy/paste this script
+# to an open slot below Бе Materials/СfН▐ but above Бе Main. Remember to save.
+#
+#==============================================================================
+# Бе Compatibility
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script is made strictly for RPG Maker VX Ace. It is highly unlikely that
+# it will run with RPG Maker VX without adjusting.
+#
+# This script overwrite method setup_events in class Game_Map. In order to make
+# this compatible with another scripts, place this above all other imported
+# scripts and below Бе Materials/СfН▐ .
+# 
+#==============================================================================
+
+#==============================================================================
+# Бб Game_Map
+#==============================================================================
+
+class Game_Map
+  
+  #--------------------------------------------------------------------------
+  # overwrite method: setup_events
+  #--------------------------------------------------------------------------
+  def setup_events
+    @events = {}
+    hash = @map.events.values.sort! { |a,b| a.id <=> b.id }
+    hash.each do |event|
+      @events[event.id] = Game_Event.new(@map_id, event)
+    end
+    @common_events = parallel_common_events.collect do |common_event|
+      Game_CommonEvent.new(common_event.id)
+    end
+    refresh_tile_events
+  end
+  
+end # Game_Map
+
+#==============================================================================
+# 
+# Бе End of File
+# 
+#==============================================================================

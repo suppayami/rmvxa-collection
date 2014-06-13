@@ -1,0 +1,392 @@
+#==============================================================================
+# 
+# Å• Yami Engine Ace - Charge Skill
+# -- Last Updated: 2012.05.13
+# -- Level: Easy
+# -- Requires: none
+# 
+#==============================================================================
+
+$imported = {} if $imported.nil?
+$imported["YSE-ChargeSkill"] = true
+
+#==============================================================================
+# Å• Updates
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2012.05.13 - Fixed Enemy Charging.
+# 2012.03.30 - Fixed Skill Targets.
+# 2012.03.29 - Fixed Auto Battle bug.
+# 2012.03.27 - Fixed Cancel Charge bug.
+# 2012.03.26 - Fixed Battle End bug.
+# 2012.03.18 - Started and Finished Script.
+# 
+#==============================================================================
+# Å• Introduction
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script provides charging skill feature. Charging Skill means that skill
+# will be used after some turn it was choosen.
+#
+#==============================================================================
+# Å• Instructions
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# To install this script, open up your script editor and copy/paste this script
+# to an open slot below Å• Materials/ëfçﬁ but above Å• Main. Remember to save.
+#
+# -----------------------------------------------------------------------------
+# Skill/Item Notetags - These notetags go in the skill/item notebox in the database.
+# -----------------------------------------------------------------------------
+# <charge turn: x>
+# Make skill be a charge skill with x charging turns.
+# -----------------------------------------------------------------------------
+# <start charge message>
+# example
+# </start charge message>
+#
+# Set the Charging Start Message to example.
+# -----------------------------------------------------------------------------
+# <continue charge message>
+# example
+# </continue charge message>
+#
+# Set the Charging Continue Message to example.
+#
+#==============================================================================
+# Å• Compatibility
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script is made strictly for RPG Maker VX Ace. It is highly unlikely that
+# it will run with RPG Maker VX without adjusting.
+# 
+#==============================================================================
+
+module YSE
+  module CHARGE_SKILL
+    
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    # - Visual Settings -
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    VISUAL_SETTING = { # Start.
+      # Message shows when choose a charge skill.
+      # Set this to nil to disable.
+      :default_msg_start      =>  "%s is charging %s!",
+      # Message shows when end a charging turn.
+      # Set this to nil to disable.
+      :default_msg_continue   =>  "%s continue charging %s...",
+    } # End.
+    
+  end # CHARGE_SKILL
+end # YSE
+
+#==============================================================================
+# Å• Editting anything past this point may potentially result in causing
+# computer damage, incontinence, explosion of user's head, coma, death, and/or
+# halitosis so edit at your own risk.
+#==============================================================================
+
+#==============================================================================
+# Å° Regular Expression
+#==============================================================================
+
+module YSE
+  module REGEXP
+  module USABLEITEM
+    
+    CHARGE_TURN = /<(?:CHARGE_TURN|charge turn):[ ](\d+)?>/i
+    START_MSG_BEGIN = /<(?:START_CHARGE_MESSAGE|start charge message)>/i
+    START_MSG_END = /<\/(?:START_CHARGE_MESSAGE|start charge message)>/i
+    CONT_MSG_BEGIN = /<(?:CONTINUE_CHARGE_MESSAGE|continue charge message)>/i
+    CONT_MSG_END = /<\/(?:CONTINUE_CHARGE_MESSAGE|continue charge message)>/i
+    
+  end # STATE
+  end # REGEXP
+end # YSE
+
+#==============================================================================
+# Å° DataManager
+#==============================================================================
+
+module DataManager
+  
+  #--------------------------------------------------------------------------
+  # alias method: load_database
+  #--------------------------------------------------------------------------
+  class <<self; alias load_database_ysecs load_database; end
+  def self.load_database
+    load_database_ysecs
+    load_notetags_ysecs
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: load_notetags_ysecs
+  #--------------------------------------------------------------------------
+  def self.load_notetags_ysecs
+    groups = [$data_skills, $data_items]
+    for group in groups
+      for obj in group
+        next if obj.nil?
+        obj.load_notetags_ysecs
+      end
+    end
+  end
+  
+end # DataManager
+
+#==============================================================================
+# Å° RPG::UsableItem
+#==============================================================================
+
+class RPG::UsableItem < RPG::BaseItem
+  
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_accessor :charge_turn
+  attr_accessor :start_msg
+  attr_accessor :continue_msg
+  
+  #--------------------------------------------------------------------------
+  # common cache: load_notetags_ysecs
+  #--------------------------------------------------------------------------
+  def load_notetags_ysecs
+    @start_begin = false
+    @continue_begin = false
+    @charge_turn = 0
+    #---
+    self.note.split(/[\r\n]+/).each { |line|
+      case line
+      #---
+      when YSE::REGEXP::USABLEITEM::CHARGE_TURN
+        @charge_turn = $1.to_i
+      when YSE::REGEXP::USABLEITEM::START_MSG_BEGIN
+        @start_begin = true
+      when YSE::REGEXP::USABLEITEM::START_MSG_END
+        @start_begin = false
+      when YSE::REGEXP::USABLEITEM::CONT_MSG_BEGIN
+        @continue_begin = true
+      when YSE::REGEXP::USABLEITEM::CONT_MSG_END
+        @continue_begin = false
+      else
+        @start_msg = line.to_s if @start_msg.nil? && @start_begin
+        @start_msg += line.to_s if @start_begin
+        @continue_msg = line.to_s if @continue_msg.nil? && @continue_begin
+        @continue_msg += line.to_s if @continue_begin
+      end
+    } # self.note.split
+    #---
+    @charge_turn = nil if @charge_turn <= 0
+    @start_msg = YSE::CHARGE_SKILL::VISUAL_SETTING[:default_msg_start]
+    @continue_msg = YSE::CHARGE_SKILL::VISUAL_SETTING[:default_msg_continue]
+    @start_msg = nil if @start_msg == ""
+    @continue_msg = nil if @continue_msg == ""
+  end
+  
+end # RPG::UsableItem
+
+#==============================================================================
+# Å° Game_Battler
+#==============================================================================
+
+class Game_Battler < Game_BattlerBase
+  
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_accessor :charged
+  attr_accessor :first_charge
+
+  #--------------------------------------------------------------------------
+  # alias method: auto_battle?
+  #--------------------------------------------------------------------------
+  alias yse_auto_battle_cs auto_battle?
+  def auto_battle?
+    charging? ? false : yse_auto_battle_cs
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: charging?
+  #--------------------------------------------------------------------------
+  def charging?
+    !@charging_cache.nil? || @charged
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: start_charge
+  #--------------------------------------------------------------------------
+  def start_charge
+    return false if charging?
+    return false if current_action.item.charge_turn.nil?
+    @charging_cache = current_action.clone
+    @charge_turn = current_action.item.charge_turn
+    return true
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: current_charging
+  #--------------------------------------------------------------------------
+  def current_charging
+    @charging_cache
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: end_charge
+  #--------------------------------------------------------------------------
+  def end_charge
+    @actions.push(@charging_cache)
+    @charging_cache = nil
+    @charge_turn = nil
+    @charged = true
+    return true
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: cancel_charge
+  #--------------------------------------------------------------------------
+  def cancel_charge
+    clear_actions
+    @charging_cache = nil
+    @charge_turn = nil
+    @charged = false
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: update_charge_skill
+  #--------------------------------------------------------------------------
+  def update_charge_skill
+    @charge_turn -= 1
+    return end_charge if @charge_turn == 0
+    return false
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: on_battle_end
+  #--------------------------------------------------------------------------
+  alias yse_on_battle_end_cs on_battle_end
+  def on_battle_end
+    cancel_charge
+    yse_on_battle_end_cs
+  end
+
+end # Game_Battler
+
+#==============================================================================
+# Å° Game_Actor
+#==============================================================================
+
+class Game_Actor < Game_Battler
+  
+  #--------------------------------------------------------------------------
+  # alias method: inputable?
+  #--------------------------------------------------------------------------
+  alias yse_inputable_cs inputable?
+  def inputable?
+    yse_inputable_cs && !charging?
+  end
+  
+end # Game_Actor
+
+#==============================================================================
+# Å° Game_Enemy
+#==============================================================================
+
+class Game_Enemy < Game_Battler
+  
+  #--------------------------------------------------------------------------
+  # alias method: make_actions
+  #--------------------------------------------------------------------------
+  alias yse_make_actions_cs make_actions
+  def make_actions
+    return super if charging?
+    yse_make_actions_cs
+  end
+  
+end # Game_Enemy
+
+#==============================================================================
+# Å° Scene_Battle
+#==============================================================================
+
+class Scene_Battle < Scene_Base
+  
+  #--------------------------------------------------------------------------
+  # alias method: execute_action
+  #--------------------------------------------------------------------------
+  alias yse_execute_action_bacs execute_action
+  def execute_action
+    return start_charge if @subject.start_charge
+    yse_execute_action_bacs
+  end
+    
+  #--------------------------------------------------------------------------
+  # alias method: process_action_end
+  #--------------------------------------------------------------------------
+  alias yse_process_action_end_bacs process_action_end
+  def process_action_end
+    process_charge_skill
+    yse_process_action_end_bacs
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: start_charge
+  #--------------------------------------------------------------------------
+  def start_charge
+    @subject.first_charge = true
+    return if @subject.current_action.item.start_msg.nil?
+    str = @subject.current_action.item.start_msg
+    skill = @subject.current_action.item
+    skill_text = sprintf("\\i[%d]%s", skill.icon_index, skill.name)
+    text = sprintf(str, @subject.name, skill_text)
+    @log_window.add_text(text)
+    3.times do @log_window.wait end
+    @log_window.back_one
+  end
+
+  #--------------------------------------------------------------------------
+  # new method: process_charge_skill
+  #--------------------------------------------------------------------------
+  def process_charge_skill
+    return @subject.first_charge = false if @subject.first_charge
+    return unless @subject.charging?
+    return unless check_charge_turn
+    process_action_charge
+  end
+
+  #--------------------------------------------------------------------------
+  # new method: check_charge_turn
+  #--------------------------------------------------------------------------
+  def check_charge_turn
+    continue = @subject.update_charge_skill
+    if continue
+      return true
+    else
+      return false if @subject.current_charging.item.continue_msg.nil?
+      str = @subject.current_charging.item.continue_msg
+      skill = @subject.current_charging.item
+      skill_text = sprintf("\\i[%d]%s", skill.icon_index, skill.name)
+      text = sprintf(str, @subject.name, skill_text)
+      @log_window.add_text(text)
+      3.times do @log_window.wait end
+      @log_window.back_one
+    end
+    return false
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: process_action_charge
+  #--------------------------------------------------------------------------
+  def process_action_charge
+    loop do
+      break if $game_troop.all_dead?
+      break unless @subject.current_action
+      @subject.current_action.prepare
+      execute_action if @subject.current_action.valid?
+      @subject.remove_current_action
+    end
+    @subject.charged = false
+  end
+  
+end # Scene_Battle
+
+#==============================================================================
+# 
+# Å• End of File
+# 
+#==============================================================================

@@ -1,0 +1,280 @@
+#==============================================================================
+# 
+# Å• Yami Engine Ace - Title Decorate
+# -- Script: Vertical Custom Command
+# -- Last Updated: 2012.05.10
+# -- Level: Easy
+# -- Requires: none
+# 
+#==============================================================================
+
+$imported = {} if $imported.nil?
+$imported["YSE-TD-VerticalCommand"] = true
+
+#==============================================================================
+# Å• Updates
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2012.05.10 - Started Script and Finished.
+# 
+#==============================================================================
+# Å• Introduction
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script will make command window in Scene Title shown as custom images.
+# You will need all images for each command, like New Game, Continue, ...
+# 
+#==============================================================================
+# Å• Instructions
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# To install this script, open up your script editor and copy/paste this script
+# to an open slot below Å• Materials/ëfçﬁ but above Å• Main. Remember to save.
+# 
+# Remember to put all images into Graphics/Titles1.
+# 
+#==============================================================================
+# Å• Compatibility
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script is made strictly for RPG Maker VX Ace. It is highly unlikely that
+# it will run with RPG Maker VX without adjusting.
+# 
+#==============================================================================
+
+module YSE
+  module TITLE_DECORATED
+    module VERTICAL_COMMAND
+      
+      #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+      # - Position Settings -
+      #-------------------------------------------------------------------------
+      # Config the position of all commands here. x and y can be negative.
+      #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+      POSITION = { # Begin.
+        :x      =>  0,
+        :y      =>  216,
+        :align  =>  :center,  # :center, :left, :right
+      } # End.
+      
+      #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+      # - Filename Settings -
+      #-------------------------------------------------------------------------
+      # Config filename for each commands here. Remember to put all images into
+      # Graphics/Titles1.
+      # Example: :symbol =>  "filename",
+      #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+      FILENAME = { # Begin.
+        :new_game =>  "Newgame",
+        :continue =>  "Continue",
+        :shutdown =>  "Shutdown",
+        :custom   =>  "Custom",
+      } # End.
+      
+      #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+      # - Effects Settings -
+      #-------------------------------------------------------------------------
+      # Config some effects for commands.
+      #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+      EFFECT  = { # Begin.
+        # Effects when move command cursor.
+        :fade   =>  true,
+        :grey   =>  true,
+        # Effects over time.
+        :time   =>  90,     # Frames.
+        :flash2 =>  false,  # Periodic Flash after :time.
+      } # End.
+    end
+  end
+end
+
+#==============================================================================
+# Å• Editting anything past this point may potentially result in causing
+# computer damage, incontinence, explosion of user's head, coma, death, and/or
+# halitosis so edit at your own risk.
+#==============================================================================
+
+#==============================================================================
+# Å° Sprite_TitleCommand
+#==============================================================================
+
+class Sprite_TitleCommand < Sprite
+  
+  #--------------------------------------------------------------------------
+  # initialize
+  #--------------------------------------------------------------------------
+  def initialize(symbol, id)
+    super()
+    #---
+    self.opacity = 0
+    @symbol = symbol
+    @id = id
+    @active = true
+    @show = false
+    @period = YSE::TITLE_DECORATED::VERTICAL_COMMAND::EFFECT[:time]
+    #---
+    refresh
+  end
+  
+  #--------------------------------------------------------------------------
+  # refresh
+  #--------------------------------------------------------------------------
+  def refresh
+    begin
+      filename = YSE::TITLE_DECORATED::VERTICAL_COMMAND::FILENAME[@symbol]
+      self.bitmap = Cache.title1(filename)
+    rescue
+      return
+    end
+    #---
+    self.x = YSE::TITLE_DECORATED::VERTICAL_COMMAND::POSITION[:x]
+    self.y = YSE::TITLE_DECORATED::VERTICAL_COMMAND::POSITION[:y]
+    #---
+    case YSE::TITLE_DECORATED::VERTICAL_COMMAND::POSITION[:align]
+    when :center
+      self.x += (Graphics.width - self.width) / 2
+    when :right
+      self.x += Graphics.width - self.width
+    end
+    self.y += self.height * @id
+  end
+  
+  #--------------------------------------------------------------------------
+  # id
+  #--------------------------------------------------------------------------
+  def id
+    @id
+  end
+  
+  #--------------------------------------------------------------------------
+  # show
+  #--------------------------------------------------------------------------
+  def show
+    @show = true
+  end
+  
+  #--------------------------------------------------------------------------
+  # activate
+  #--------------------------------------------------------------------------
+  def activate
+    return if @active
+    @active = true
+    if YSE::TITLE_DECORATED::VERTICAL_COMMAND::EFFECT[:grey]
+      self.tone = Tone.new(0,0,0,0)
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # deactivate
+  #--------------------------------------------------------------------------
+  def deactivate
+    return unless @active
+    @active = false
+    if YSE::TITLE_DECORATED::VERTICAL_COMMAND::EFFECT[:grey]
+      self.tone = Tone.new(0,0,0,255)
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # update
+  #--------------------------------------------------------------------------
+  def update
+    super
+    cond = YSE::TITLE_DECORATED::VERTICAL_COMMAND::EFFECT[:fade]
+    #---
+    if @show
+      cond1 = @active && self.opacity < 255
+      cond2 = !@active && self.opacity < 155
+      self.opacity += 40 if (cond1 || cond2 || !cond) 
+    end
+    #---
+    if @active
+      cond1 = cond && self.opacity < 255
+      self.opacity += 20 if cond1
+    else
+      cond2 = cond && self.opacity > 155
+      self.opacity -= [20, self.opacity - 155].min if cond2
+    end
+    @period -= 1
+    if @period <= 0
+      @period = YSE::TITLE_DECORATED::VERTICAL_COMMAND::EFFECT[:time]
+      return unless YSE::TITLE_DECORATED::VERTICAL_COMMAND::EFFECT[:flash2]
+      return unless @active
+      self.flash(Color.new(255,255,255), 12)
+    end
+  end
+  
+end # Sprite_TitleCommand
+
+#==============================================================================
+# Å° Window_TitleCommand
+#==============================================================================
+
+class Window_TitleCommand < Window_Command
+  
+  #--------------------------------------------------------------------------
+  # new method: symbol_list
+  #--------------------------------------------------------------------------
+  def symbol_list
+    result = []
+    @list.each { |command|
+      result.push(command[:symbol])
+    }
+    result
+  end
+  
+end # Window_TitleCommand
+
+#==============================================================================
+# Å° Scene_Title
+#==============================================================================
+
+class Scene_Title < Scene_Base
+  
+  #--------------------------------------------------------------------------
+  # alias method: create_command_window
+  #--------------------------------------------------------------------------
+  alias yse_tdvc_create_command_window create_command_window
+  def create_command_window
+    yse_tdvc_create_command_window
+    @command_window.y = Graphics.height
+    @command_sprite = []
+    i = 0
+    @command_window.symbol_list.each { |symbol|
+      sprite = Sprite_TitleCommand.new(symbol, i); i += 1
+      @command_sprite.push(sprite)
+    }
+    @command_sprite.each { |sprite| sprite.show }
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: update
+  #--------------------------------------------------------------------------
+  alias yse_tdvc_update update
+  def update
+    yse_tdvc_update
+    @command_sprite.each { |sprite| 
+      sprite.update
+      @command_window.index == sprite.id ? sprite.activate : sprite.deactivate
+    }
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: terminate
+  #--------------------------------------------------------------------------
+  alias yse_tdvc_terminate terminate
+  def terminate
+    yse_tdvc_terminate
+    dispose_command_sprite
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: dispose_command_sprite
+  #--------------------------------------------------------------------------
+  def dispose_command_sprite
+    @command_sprite.each { |sprite| sprite.dispose }
+  end
+  
+end # Scene_Title
+
+#==============================================================================
+# 
+# Å• End of File
+# 
+#==============================================================================

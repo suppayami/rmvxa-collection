@@ -1,0 +1,438 @@
+#==============================================================================
+# 
+# Å• Yami Engine Ace - Patch System Lite
+# -- Last Updated: 2012.05.29
+# -- Level: Hard
+# -- Requires: Yami Engine Ace - Basic Module
+# 
+#==============================================================================
+
+$imported = {} if $imported.nil?
+$imported["YSE-PatchSystemLite"] = true
+
+#==============================================================================
+# Å• Updates
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2012.05.29 - Release Lite version.
+# 
+#==============================================================================
+# Å• Introduction
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script will generate patch files for your game and make your game read
+# it to update things.
+# 
+#==============================================================================
+# Å• Instructions
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# To install this script, open up your script editor and copy/paste this script
+# to an open slot below Å• Materials/ëfçﬁ but above Å• Main. Remember to save.
+#
+# To make a patch, enter Title Screen by RPG Maker VX Ace (Test Mode) and press
+# F5. Patch will be made and the game exits.
+#
+#==============================================================================
+# Å• Compatibility
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script is made strictly for RPG Maker VX Ace. It is highly unlikely that
+# it will run with RPG Maker VX without adjusting.
+# 
+# Do not compress patch files in any methods.
+# 
+#==============================================================================
+
+#==============================================================================
+# Å• Configuration
+#==============================================================================
+
+module YSE
+  module PATCH_SYSTEM
+    
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    # - Save Data Configuration -
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    SAVE_CONFIGURATION = { # Start here.
+      :path          =>  "Patches",
+      :prefix_name   =>  "Patch",
+    } # Do not delete this.
+    
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    # - Load Data Configuration -
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    LOAD_CONFIGURATION = { # Start here.
+      :load_test      =>  true, # Load Patches when Test.
+      :quit_fake      =>  true, # Quit Game when detected Fake Patches.
+      :check_patch    =>  true,
+    } # Do not delete this.
+
+  end
+end
+
+#==============================================================================
+# Å• Editting anything past this point may potentially result in causing
+# computer damage, incontinence, explosion of user's head, coma, death, and/or
+# halitosis so edit at your own risk.
+#==============================================================================
+
+PATCH_HASH_NAME = ["Actors", "Classes", "Skills", "Items", "Weapons", "Armors",
+                   "Enemies", "Troops", "States", "Animations", "Tilesets", "Common_Events"]
+
+#==============================================================================
+# Å° YSE - Patch Module
+#==============================================================================
+
+module YSE
+  module PATCH_SYSTEM
+    
+    #--------------------------------------------------------------------------
+    # load_map_data
+    #--------------------------------------------------------------------------
+    def self.load_map_data(map_id)
+      result = load_data(sprintf("Data/Map%03d.rvdata2", map_id))
+      result
+    end
+    
+    #--------------------------------------------------------------------------
+    # slice_data
+    #--------------------------------------------------------------------------
+    def self.slice_data(data)
+      # Preparing Output
+      result = {}
+      actors = {}
+      classes = {}
+      skills = {}
+      items = {}
+      weapons = {}
+      armors = {}
+      enemies = {}
+      troops = {}
+      states = {}
+      animations = {}
+      map_data = {}
+      tileset = {}
+      common_event = {}
+      # Analyzing Data
+      data.each { |key, value|
+        case key
+        when /(?:common_events)(\d+)?/i
+          common_event[$1] = value
+        when /(?:tilesets)(\d+)?/i
+          tileset[$1] = value
+        when /(?:map)(\d+)/i
+          map_data[$1] = value
+        when /(?:map_info)/i
+          map_data[:map_info] = value
+        when /(?:actors)(\d+)/i
+          actors[$1] = value
+        when /(?:classes)(\d+)/i
+          classes[$1] = value
+        when /(?:skills)(\d+)/i
+          skills[$1] = value
+        when /(?:items)(\d+)/i
+          items[$1] = value
+        when /(?:weapons)(\d+)/i
+          weapons[$1] = value
+        when /(?:armors)(\d+)/i
+          armors[$1] = value
+        when /(?:enemies)(\d+)/i
+          enemies[$1] = value
+        when /(?:troops)(\d+)/i
+          troops[$1] = value
+        when /(?:states)(\d+)/i
+          states[$1] = value
+        when /(?:animations)(\d+)/i
+          animations[$1] = value
+        end
+      }
+      # Combining Data
+      result[:common_event] = common_event
+      result[:tileset] = tileset
+      result[:map_data] = map_data
+      result[:actors] = actors
+      result[:classes] = classes
+      result[:skills] = skills
+      result[:items] = items
+      result[:weapons] = weapons
+      result[:armors] = armors
+      result[:enemies] = enemies
+      result[:troops] = troops
+      result[:states] = states
+      result[:animations] = animations
+      result
+    end
+    
+  end # PATCH_SYSTEM
+end # YSE
+
+#==============================================================================
+# Å° DataManager
+#==============================================================================
+
+module DataManager
+  
+  #--------------------------------------------------------------------------
+  # alias method: load_normal_database
+  #--------------------------------------------------------------------------
+  class<<self; alias datamanager_patch_yse_load_normal_database load_normal_database; end
+  def self.load_normal_database
+    datamanager_patch_yse_load_normal_database
+    return unless YSE::PATCH_SYSTEM::LOAD_CONFIGURATION[:load_test]
+    load_patch_database
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: load_patch_database
+  #--------------------------------------------------------------------------
+  def self.load_patch_database
+    $data_maps_patch = {}
+    # Load Directory
+    dir = YSE::PATCH_SYSTEM::SAVE_CONFIGURATION[:path]
+    prefix = YSE::PATCH_SYSTEM::SAVE_CONFIGURATION[:prefix_name]
+    begin
+      directory = Dir.open("./#{dir}") 
+    rescue 
+      Dir.mkdir("./#{dir}", 0777)
+      directory = Dir.open("./#{dir}") 
+    end
+    directory.each { |filename|
+      if filename =~ /(?:#{prefix})(\d+)?(?:.*)/i
+        YSE.load_data("./#{dir}/#{filename}", method(:extract_patch_data), 0, :mtime)
+      end
+    }
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: check_hash
+  #--------------------------------------------------------------------------
+  def self.check_hash(data)
+    return unless YSE::PATCH_SYSTEM::LOAD_CONFIGURATION[:check_patch]
+    return unless data["time"]
+    real_check = YSE.make_hash(data["time"])
+    return if data["hash"] == real_check
+    msg = "System detected a fake patch. Filename: #{data["filename"]}.\n"
+    msg += "Please delete that file or you will take your own risk.\n"
+    msg += "Thank you."
+    YSE.message_box("Fake Patch Detected!", msg)
+    exit if YSE::PATCH_SYSTEM::LOAD_CONFIGURATION[:quit_fake]
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: extract_patch_data
+  #--------------------------------------------------------------------------
+  def self.extract_patch_data(data, mtime)
+    # Checking hash
+    check_hash(data)
+    # Slice Data
+    temp = YSE::PATCH_SYSTEM.slice_data(data)
+    common_event = temp[:common_event]
+    tileset = temp[:tileset]
+    map_data = temp[:map_data]
+    actors = temp[:actors]
+    classes = temp[:classes]
+    skills = temp[:skills]
+    items = temp[:items]
+    weapons = temp[:weapons]
+    armors = temp[:armors]
+    enemies = temp[:enemies]
+    troops = temp[:troops]
+    states = temp[:states]
+    animations = temp[:animations]
+    # Common Events
+    common_event.each { |key, value|
+      next if value.nil?
+      $data_common_events[key.to_i] = value
+    }
+    # Database
+    tileset.each { |key, value|
+      next if value.nil?
+      $data_tilesets[key.to_i] = value
+    }
+    actors.each { |key, value|
+      next if value.nil?
+      $data_actors[key.to_i] = value
+    }
+    classes.each { |key, value|
+      next if value.nil?
+      $data_classes[key.to_i] = value
+    }
+    skills.each { |key, value|
+      next if value.nil?
+      $data_skills[key.to_i] = value
+    }
+    items.each { |key, value|
+      next if value.nil?
+      $data_items[key.to_i] = value
+    }
+    weapons.each { |key, value|
+      next if value.nil?
+      $data_weapons[key.to_i] = value
+    }
+    armors.each { |key, value|
+      next if value.nil?
+      $data_armors[key.to_i] = value
+    }
+    enemies.each { |key, value|
+      next if value.nil?
+      $data_enemies[key.to_i] = value
+    }
+    troops.each { |key, value|
+      next if value.nil?
+      $data_troops[key.to_i] = value
+    }
+    states.each { |key, value|
+      next if value.nil?
+      $data_states[key.to_i] = value
+    }
+    animations.each { |key, value|
+      next if value.nil?
+      $data_animations[key.to_i] = value
+    }
+    # Maps
+    $data_mapinfos = map_data[:map_info] if map_data[:map_info]
+    map_data.delete(:map_info)
+    $data_maps_patch = map_data
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: reload_map_if_updated
+  #--------------------------------------------------------------------------
+  class<<self; alias datamanager_patch_yse_reload_map_if_updated reload_map_if_updated; end
+  def self.reload_map_if_updated
+    datamanager_patch_yse_reload_map_if_updated
+    reload_map_if_patched
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: reload_map_if_patched
+  #--------------------------------------------------------------------------
+  def self.reload_map_if_patched
+    unless $data_maps_patch[$game_map.map_id].nil?
+      $game_map.setup($game_map.map_id)
+      $game_player.center($game_player.x, $game_player.y)
+      $game_player.make_encounter_count
+    end
+  end
+  
+end # DataManager
+
+#==============================================================================
+# Å° Game_Map
+#==============================================================================
+
+class Game_Map
+  
+  #--------------------------------------------------------------------------
+  # overwrite method: setup
+  #--------------------------------------------------------------------------
+  def setup(map_id)
+    @map_id = map_id
+    if $data_maps_patch.nil? || $data_maps_patch[map_id.to_s].nil?
+      @map = load_data(sprintf("Data/Map%03d.rvdata2", @map_id))
+    else
+      @map = $data_maps_patch[map_id.to_s]
+    end
+    @tileset_id = @map.tileset_id
+    @display_x = 0
+    @display_y = 0
+    referesh_vehicles
+    setup_events
+    setup_scroll
+    setup_parallax
+    setup_battleback
+    @need_refresh = false
+  end
+  
+end # Game_Map
+
+#==============================================================================
+# Å° Scene_Patch_YSE
+#==============================================================================
+
+class Scene_Patch_YSE < Scene_Base
+  
+  #--------------------------------------------------------------------------
+  # start
+  #--------------------------------------------------------------------------
+  def start
+    super
+    apply_patch_all
+  end
+  
+  #--------------------------------------------------------------------------
+  # apply_patch
+  #--------------------------------------------------------------------------
+  def apply_patch
+    dir = YSE::PATCH_SYSTEM::SAVE_CONFIGURATION[:path]
+    prefix = YSE::PATCH_SYSTEM::SAVE_CONFIGURATION[:prefix_name]
+    time = Time.now.strftime("%s")
+    filename = YSE.make_filename("#{prefix}#{time}", dir)
+    @temporary = {}
+    $patch_map_temp.each { |id|
+      next if id.nil?
+      map_data = YSE::PATCH_SYSTEM.load_map_data(id)
+      @temporary["map#{id}"] = map_data
+      @temporary["map_info"] = $data_mapinfos
+    }
+    PATCH_HASH_NAME.each { |patch_name|
+      cStr = %Q(
+        $patch_#{patch_name.downcase}_temp.each { |id|
+          next if id.nil?
+          @temporary["#{patch_name.downcase}"+id.to_s] = $data_#{patch_name.downcase}[id]
+        }
+      )
+      eval(cStr)
+    }
+    @temporary["hash"] = YSE.make_hash(time)
+    @temporary["time"] = time
+    @temporary["filename"] = filename
+    YSE.save_data(filename, @temporary)
+    YSE.message_box("Patch System","Create Patch Complete! Location: #{filename}. Click OK to Exit.")
+    exit
+  end
+  
+  #--------------------------------------------------------------------------
+  # apply_patch_all
+  #--------------------------------------------------------------------------
+  def apply_patch_all
+    $patch_map_temp = []
+    $data_mapinfos.each_key { |i|
+      next if i == 0
+      $patch_map_temp.push(i)
+    }
+    PATCH_HASH_NAME.each { |patch_name|
+      cStr = %Q(
+        $patch_#{patch_name.downcase}_temp = []
+        $data_#{patch_name.downcase}.size.times { |i|
+          next if i == 0
+          $patch_#{patch_name.downcase}_temp.push(i)
+        }
+      )
+      eval(cStr)
+    }
+    apply_patch
+  end
+  
+end # Scene_Patch_YSE
+
+#==============================================================================
+# Å° Scene_Patch_YSE
+#==============================================================================
+
+class Scene_Title < Scene_Base
+  
+  #--------------------------------------------------------------------------
+  # alias method: update
+  #--------------------------------------------------------------------------
+  alias patch_yse_update update
+  def update
+    patch_yse_update
+    return unless $TEST
+    SceneManager.call(Scene_Patch_YSE) if Input.trigger?(:F5)
+  end
+  
+end # Scene_Title
+
+#==============================================================================
+# 
+# Å• End of File
+# 
+#==============================================================================

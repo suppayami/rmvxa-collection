@@ -1,0 +1,452 @@
+﻿#==============================================================================
+# 
+# ▼ Yami Engine Ace - Guardian Series
+# -- Script: Guardian Menu
+# -- Last Updated: 2012.03.30
+# -- Level: Easy
+# -- Requires: YSE - Guardian Basic
+# 
+#==============================================================================
+
+$imported = {} if $imported.nil?
+$imported["YSE-GuardianMenu"] = true
+
+#==============================================================================
+# ▼ Updates
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2012.03.30 - Compatible script: YSE - Guardian Summon.
+# 2012.03.13 - Finished Script.
+# 2012.03.11 - Started Script.
+# 
+#==============================================================================
+# ▼ Introduction
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# Manages menu commands for Guardian. This Menu will be separate with Main Menu
+# for actor. Can be called by Main Menu.
+# If you have Yanfly Engine Ace - Menu Engine, You must add a custom command
+# which calls Handler Method :command_guardian.
+#
+#==============================================================================
+# ▼ Instructions
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# To install this script, open up your script editor and copy/paste this script
+# to an open slot below ▼ Materials/素材 but above ▼ Main. Remember to save.
+#
+#==============================================================================
+# ▼ Compatibility
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script is made strictly for RPG Maker VX Ace. It is highly unlikely that
+# it will run with RPG Maker VX without adjusting.
+# 
+#==============================================================================
+
+module YSE
+  module GUARDIAN_MENU
+    
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    # - Command Window Settings -
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    # This section adjusts the commands that appear in the command window used
+    # for the status screen. Rearrange the commands, add new ones, remove them
+    # as you see fit.
+    # 
+    # -------------------------------------------------------------------------
+    # :command         Description
+    # -------------------------------------------------------------------------
+    # :status          Calls Scene_Status scene.
+    # :skill           Calls Scene_Skill scene.
+    # :equip           Calls Scene_Equip scene.
+    #
+    # :gpair           Calls Guardian Pairing.
+    #                  Require YSE - Guardian Pairing.
+    # 
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    COMMANDS = [ # The order at which the menu items are shown.
+    # [    :command,    "Display"],
+      [    :status,      "Status"],
+      [    :skill,       "Skills"],
+      [    :equip,       "Equips"],
+      [    :gpair,      "Pairing"],
+    # [    :custom1,     "Custom"],
+    # [    :custom2,     "motsuC"],
+    ] # Do not remove this.
+    
+    #--------------------------------------------------------------------------
+    # - Menu Custom Commands -
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    # For those who use scripts to that may produce unique effects for the
+    # status menu, use this hash to manage the custom commands for the Status
+    # Command Window. You can disable certain commands or prevent them from
+    # appearing by using switches. If you don't wish to bind them to a switch,
+    # set the proper switch to 0 for it to have no impact.
+    #--------------------------------------------------------------------------
+    CUSTOM_STATUS_COMMANDS = {
+    # :command => [EnableSwitch, ShowSwitch, Handler Method],
+      :custom1 => [           0,          0, :command_name1],
+      :custom2 => [           0,          0, :command_name2],
+    } # Do not remove this.
+    
+    # These Configurations contain visual and vocab things.
+    VOCAB_MENU = "Guardians"    # Command Display in Main Menu.
+    MENU_ENABLE_SWITCH = 0      # Set to 0 if don't wanna use this function.
+    
+  end
+end
+
+#==============================================================================
+# ▼ Editting anything past this point may potentially result in causing
+# computer damage, incontinence, explosion of user's head, coma, death, and/or
+# halitosis so edit at your own risk.
+#==============================================================================
+
+#==============================================================================
+# ■ Vocab
+#==============================================================================
+
+module Vocab
+  GuardianMenu = YSE::GUARDIAN_MENU::VOCAB_MENU
+end
+
+#==============================================================================
+# ■ Game_Temp
+#==============================================================================
+
+class Game_Temp
+  
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_accessor :guardian_menu_command
+  
+end # Game_Temp
+
+#==============================================================================
+# ■ Window_MenuCommand
+#==============================================================================
+
+class Window_MenuCommand < Window_Command
+  
+  #--------------------------------------------------------------------------
+  # alias method: make_command_list
+  #--------------------------------------------------------------------------
+  alias yse_add_main_commands_gm add_main_commands
+  def add_main_commands
+    yse_add_main_commands_gm
+    add_guardian_commands unless $imported["YEA-AceMenuEngine"]
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: guardian_command_enabled
+  #--------------------------------------------------------------------------
+  def guardian_command_enabled
+    return false if $game_party.guardians.size == 0
+    return true if YSE::GUARDIAN_MENU::MENU_ENABLE_SWITCH <= 0
+    return $game_switches[YSE::GUARDIAN_MENU::MENU_ENABLE_SWITCH]
+  end
+
+  #--------------------------------------------------------------------------
+  # new method: add_guardian_commands
+  #--------------------------------------------------------------------------
+  def add_guardian_commands
+    add_command(Vocab::GuardianMenu,   :guardian,   guardian_command_enabled)
+  end
+  
+end # Window_MenuCommand
+
+#==============================================================================
+# ■ Scene_Menu
+#==============================================================================
+
+class Scene_Menu < Scene_MenuBase
+  
+  #--------------------------------------------------------------------------
+  # alias method: create_command_window
+  #--------------------------------------------------------------------------
+  alias yse_create_command_window_gm create_command_window
+  def create_command_window
+    yse_create_command_window_gm
+    @command_window.set_handler(:guardian, method(:command_guardian))
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: command_guardian
+  #--------------------------------------------------------------------------
+  def command_guardian
+    SceneManager.call(Scene_GuardianMenu)
+  end
+  
+end # Scene_Menu
+
+#==============================================================================
+# ■ Window_GuardianMenuCommand
+#==============================================================================
+
+class Window_GuardianMenuCommand < Window_Command
+  
+  #--------------------------------------------------------------------------
+  # initialize
+  #--------------------------------------------------------------------------
+  def initialize(dx, dy)
+    super(dx, dy)
+  end
+  
+  #--------------------------------------------------------------------------
+  # window_width
+  #--------------------------------------------------------------------------
+  def window_width; return 160; end
+  
+  #--------------------------------------------------------------------------
+  # visible_line_number
+  #--------------------------------------------------------------------------
+  def visible_line_number; return 4; end
+    
+  #--------------------------------------------------------------------------
+  # alignment
+  #--------------------------------------------------------------------------
+  def alignment; return 1; end
+  
+  #--------------------------------------------------------------------------
+  # ok_enabled?
+  #--------------------------------------------------------------------------
+  def ok_enabled?
+    return handle?(current_symbol)
+  end
+  
+  #--------------------------------------------------------------------------
+  # process_ok
+  #--------------------------------------------------------------------------
+  def process_ok
+    $game_temp.guardian_menu_command = self.index
+    super
+  end
+  
+  #--------------------------------------------------------------------------
+  # make_command_list
+  #--------------------------------------------------------------------------
+  def make_command_list
+    for command in YSE::GUARDIAN_MENU::COMMANDS
+      case command[0]
+      #--- Default ---
+      when :status, :items, :skill, :equip
+        add_command(command[1], command[0], $game_party.guardians.size > 0)
+      #--- Imported ---
+      when :gpair
+        add_command(command[1], command[0], $game_party.guardians.size > 0)
+      #--- Custom Commands ---
+      else
+        process_custom_command(command)
+      end
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # process_custom_command
+  #--------------------------------------------------------------------------
+  def process_custom_command(command)
+    return unless YSE::GUARDIAN_MENU::CUSTOM_STATUS_COMMANDS.include?(command[0])
+    show = YSE::GUARDIAN_MENU::CUSTOM_STATUS_COMMANDS[command[0]][1]
+    continue = show <= 0 ? true : $game_switches[show]
+    return unless continue
+    text = command[1]
+    switch = YSE::GUARDIAN_MENU::CUSTOM_STATUS_COMMANDS[command[0]][0]
+    enabled = switch <= 0 ? true : $game_switches[switch]
+    add_command(text, command[0], enabled)
+  end
+  
+end # Window_GuardianMenuCommand
+
+#==============================================================================
+# ■ Window_MenuGuardianSceneMenu
+#==============================================================================
+
+class Window_MenuGuardianSceneMenu < Window_MenuGuardian
+  
+  #--------------------------------------------------------------------------
+  # window_height
+  #--------------------------------------------------------------------------
+  def window_height
+    Graphics.height - 128 - 64
+  end
+  
+  #--------------------------------------------------------------------------
+  # process_ok
+  #--------------------------------------------------------------------------
+  def process_ok
+    $game_party.menu_actor = $game_party.guardians[index]
+    $game_temp.scene_gmenu_id = $game_party.guardians[index].id
+    super
+  end
+  
+end # Window_MenuGuardianSceneMenu
+
+#==============================================================================
+# ■ Scene_GuardianMenu
+#==============================================================================
+
+class Scene_GuardianMenu < Scene_MenuBase
+  
+  #--------------------------------------------------------------------------
+  # start
+  #--------------------------------------------------------------------------
+  def start
+    super
+    create_help_window
+    create_command_window
+    create_status_window
+    create_guardian_window
+    create_actor_window
+  end
+  
+  #--------------------------------------------------------------------------
+  # create_command_window
+  #--------------------------------------------------------------------------
+  def create_command_window
+    wy = @help_window.height
+    @command_window = Window_GuardianMenuCommand.new(0, wy)
+    @command_window.viewport = @viewport
+    @command_window.set_handler(:cancel,   method(:return_scene))
+    @command_window.set_handler(:skill,     method(:command_personal))
+    @command_window.set_handler(:equip,     method(:command_personal))
+    @command_window.set_handler(:status,    method(:command_personal))
+    if $imported["YSE-GuardianPairing"]
+      @command_window.set_handler(:gpair, method(:command_personal_actor))
+    end
+    process_custom_status_commands
+    if $game_temp.guardian_menu_command
+      @command_window.index = $game_temp.guardian_menu_command
+      $game_temp.guardian_menu_command = nil
+    end
+  end
+    
+  #--------------------------------------------------------------------------
+  # create_status_window
+  #--------------------------------------------------------------------------
+  def create_status_window
+    wy = @help_window.height
+    @status_window = Window_StatusGuardian.new(@command_window.width, wy)
+    @status_window.viewport = @viewport
+  end
+  
+  #--------------------------------------------------------------------------
+  # create_guardian_window
+  #--------------------------------------------------------------------------
+  def create_guardian_window
+    wy = @command_window.height + @command_window.y
+    @guardian_window = Window_MenuGuardianSceneMenu.new(0, wy)
+    @guardian_window.viewport = @viewport
+    @guardian_window.help_window = @help_window
+    @guardian_window.update_help
+    @guardian_window.status_window = @status_window
+  end
+  
+  #--------------------------------------------------------------------------
+  # create_actor_window
+  #--------------------------------------------------------------------------
+  def create_actor_window
+    @actor_window = Window_MenuActor.new
+    @actor_window.viewport = @viewport
+    @actor_window.set_handler(:ok,     method(:on_actor_ok))
+    @actor_window.set_handler(:cancel, method(:on_actor_cancel))
+  end
+  
+  #--------------------------------------------------------------------------
+  # command_personal
+  #--------------------------------------------------------------------------
+  def command_personal
+    @guardian_window.activate
+    @guardian_window.select_last
+    @guardian_window.set_handler(:ok,     method(:on_personal_ok))
+    @guardian_window.set_handler(:cancel, method(:on_personal_cancel))
+  end
+  
+  #--------------------------------------------------------------------------
+  # command_personal_actor
+  #--------------------------------------------------------------------------
+  def command_personal_actor
+    @actor_window.x = Graphics.width - @actor_window.width
+    @actor_window.show.activate
+    @actor_window.select_last
+  end
+  
+  #--------------------------------------------------------------------------
+  # on_personal_ok
+  #--------------------------------------------------------------------------
+  def on_personal_ok
+    case @command_window.current_symbol
+    when :skill
+      SceneManager.call(Scene_Skill)
+    when :equip
+      SceneManager.call(Scene_Equip)
+    when :status
+      SceneManager.call(Scene_Status)
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # on_personal_cancel
+  #--------------------------------------------------------------------------
+  def on_personal_cancel
+    @guardian_window.unselect
+    @command_window.activate
+  end
+  
+  #--------------------------------------------------------------------------
+  # on_actor_ok
+  #--------------------------------------------------------------------------
+  def on_actor_ok 
+    case @command_window.current_symbol
+    #--- Imported ---
+    when :gpair
+      SceneManager.call(Scene_GuardianPairing)
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # on_actor_cancel
+  #--------------------------------------------------------------------------
+  def on_actor_cancel
+    @actor_window.hide.deactivate
+    @command_window.activate
+  end
+  
+  #--------------------------------------------------------------------------
+  # process_custom_status_commands
+  #--------------------------------------------------------------------------
+  def process_custom_status_commands
+    commands = YSE::GUARDIAN_MENU::COMMANDS
+    custom_commands = YSE::GUARDIAN_MENU::CUSTOM_STATUS_COMMANDS
+    for command in commands
+      next unless custom_commands.include?(command[0])
+      called_method = custom_commands[command[0]][2]
+      @command_window.set_handler(command[0], method(called_method))
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: command_guardian_pairing
+  #--------------------------------------------------------------------------
+  def command_guardian_pairing
+    SceneManager.call(Scene_GuardianPairing)
+  end
+  
+  #--------------------------------------------------------------------------
+  # command_name1
+  #--------------------------------------------------------------------------
+  def command_name1
+    # Do nothing
+  end
+  
+  #--------------------------------------------------------------------------
+  # command_name2
+  #--------------------------------------------------------------------------
+  def command_name2
+    # Do nothing
+  end
+  
+end # Scene_GuardianMenu
+
+#==============================================================================
+# 
+# ▼ End of File
+# 
+#==============================================================================

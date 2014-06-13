@@ -1,0 +1,603 @@
+﻿#==============================================================================
+# 
+# ▼ Yami Engine Ace - Guardian Series
+# -- Script: Guardian Pairing
+# -- Last Updated: 2012.05.23
+# -- Level: Easy
+# -- Requires: YSE - Guardian Basic
+# 
+#==============================================================================
+
+$imported = {} if $imported.nil?
+$imported["YSE-GuardianPairing"] = true
+
+#==============================================================================
+# ▼ Updates
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2012.05.23 - Added methods:
+#              + Force Pairing by script: YSE.pair_guardian(actor_id, guardian_id)
+#              + Check if paired:
+#                  YSE.paired(actor_id): Check if Actor is paired.
+#                  YSE.paired(actor_id, guardian_id): Check if Actor is paired with Guardian.
+# 2012.05.06 - Compatible script: YSE - Guardian Esper Learning.
+# 2012.04.08 - Fixed Remove Guardian.
+# 2012.03.30 - Compatible script: YSE - Guardian Summon.
+# 2012.03.15 - Separated Boosting Attributes feature.
+#            - Changed a little in visuals.
+# 2012.03.14 - Finished Script.
+# 2012.03.13 - Started Script.
+# 
+#==============================================================================
+# ▼ Introduction
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This scripts provides "Equip Guardian to Actor" Feature for Guardians.
+# If you have YSE - Guardian Menu in scripts list, You must add :gpair to 
+# Guardian Menu commands to show Pairing Menu.
+#
+#==============================================================================
+# ▼ Instructions
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# To install this script, open up your script editor and copy/paste this script
+# to an open slot below ▼ Materials/素材 but above ▼ Main. Remember to save.
+#
+#==============================================================================
+# ▼ Compatibility
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script is made strictly for RPG Maker VX Ace. It is highly unlikely that
+# it will run with RPG Maker VX without adjusting.
+# 
+#==============================================================================
+
+module YSE
+  module GUARDIAN_PAIRING
+    
+    # These Configurations contain visual and vocab things.
+    PAIRED_GUARDIAN = "%s"
+    NON_PAIRED = "Not Paired"
+    VOCAB_MENU = "Junction"    # Command Display in Main Menu.
+    MENU_ENABLE_SWITCH = 0      # Set to 0 if don't wanna use this function.
+    
+    COMMANDS = [ # The order at which the menu items are shown.
+      [    :pair,            "Pair"], # Pairing command.
+      [    :skill,"Skills Learning"], # Skills Learning command.
+                                      # Require Guardian Esper Learning
+      [    :unpair,       "Un-Pair"], # Un-Pairing command
+    ] # Do not remove this.
+    
+  end
+end
+
+#==============================================================================
+# ▼ Editting anything past this point may potentially result in causing
+# computer damage, incontinence, explosion of user's head, coma, death, and/or
+# halitosis so edit at your own risk.
+#==============================================================================
+
+#==============================================================================
+# ■ YSE - Basic Module
+#==============================================================================
+
+module YSE
+  
+  #--------------------------------------------------------------------------
+  # new method: pair_guardian
+  #--------------------------------------------------------------------------
+  def self.pair_guardian(actor_id, guardian_id)
+    return unless $game_actors[actor_id]
+    return unless $game_actors[guardian_id]
+    $game_actors[actor_id].pair($game_actors[guardian_id])
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: paired
+  #--------------------------------------------------------------------------
+  def self.paired(actor_id, guardian_id = nil)
+    return false unless $game_actors[actor_id]
+    return $game_actors[actor_id].is_pair? if guardian_id.nil?
+    return $game_actors[actor_id].guardians.include?($game_actors[guardian_id])
+    return false
+  end
+  
+end # YSE
+
+#==============================================================================
+# ■ Vocab
+#==============================================================================
+
+module Vocab
+  GuardianPairingMenu = YSE::GUARDIAN_PAIRING::VOCAB_MENU
+  PairedGuardian = YSE::GUARDIAN_PAIRING::PAIRED_GUARDIAN
+  NonPaired = YSE::GUARDIAN_PAIRING::NON_PAIRED
+end
+
+#==============================================================================
+# ■ Game_Temp
+#==============================================================================
+
+class Game_Temp
+  
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_accessor :guardian_pairing_menu_command
+  
+end # Game_Temp
+
+#==============================================================================
+# ■ Window_MenuCommand
+#==============================================================================
+
+class Window_MenuCommand < Window_Command
+  
+  #--------------------------------------------------------------------------
+  # alias method: make_command_list
+  #--------------------------------------------------------------------------
+  alias yse_add_main_commands_gp add_main_commands
+  def add_main_commands
+    yse_add_main_commands_gp
+    add_guardian_pairing_commands unless $imported["YEA-AceMenuEngine"]
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: guardian_command_enabled
+  #--------------------------------------------------------------------------
+  def guardian_pairing_command_enabled
+    return false if $game_party.guardians.size == 0
+    return true if YSE::GUARDIAN_PAIRING::MENU_ENABLE_SWITCH <= 0
+    return $game_switches[YSE::GUARDIAN_PAIRING::MENU_ENABLE_SWITCH]
+  end
+
+  #--------------------------------------------------------------------------
+  # new method: add_guardian_pairing_commands
+  #--------------------------------------------------------------------------
+  def add_guardian_pairing_commands
+    return if $imported["YSE-GuardianMenu"]
+    add_command(Vocab::GuardianPairingMenu,   :gpair,   guardian_pairing_command_enabled)
+  end
+  
+end # Window_MenuCommand
+
+#==============================================================================
+# ■ Scene_Menu
+#==============================================================================
+
+class Scene_Menu < Scene_MenuBase
+  
+  #--------------------------------------------------------------------------
+  # alias method: create_command_window
+  #--------------------------------------------------------------------------
+  alias yse_create_command_window_gp create_command_window
+  def create_command_window
+    yse_create_command_window_gp
+    @command_window.set_handler(:gpair, method(:command_personal))
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: on_personal_ok
+  #--------------------------------------------------------------------------
+  alias yse_on_personal_ok_gp on_personal_ok
+  def on_personal_ok
+    case @command_window.current_symbol
+    when :gpair
+      $game_party.target_actor = $game_party.members[@status_window.index]
+      SceneManager.call(Scene_GuardianPairing)
+    else
+      yse_on_personal_ok_gp
+    end
+  end
+  
+end # Scene_Menu
+
+#==============================================================================
+# ■ Game_Actor
+#==============================================================================
+
+class Game_Actor < Game_Battler
+  
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_accessor :pair_actor
+
+  #--------------------------------------------------------------------------
+  # alias method: setup
+  #--------------------------------------------------------------------------
+  alias yse_setup_gp setup
+  def setup(actor_id)
+    @guardians = []
+    @pair_actor = nil
+    yse_setup_gp(actor_id)
+    clear_guardians
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: guardians
+  #--------------------------------------------------------------------------
+  def guardians
+    @guardians.collect {|id| $game_actors[id] }
+  end
+
+  #--------------------------------------------------------------------------
+  # new method: paired_actor
+  #--------------------------------------------------------------------------
+  def paired_actor
+    @pair_actor.nil? ? nil : $game_actors[@pair_actor]
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: first_guardian
+  #--------------------------------------------------------------------------
+  def first_guardian
+    guardians[0]
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: is_pair?
+  #--------------------------------------------------------------------------
+  def is_pair?
+    guardian? ? !@pair_actor.nil? : guardians.size > 0
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: is_pair?
+  #--------------------------------------------------------------------------
+  def force_pair(guardian)
+    @guardians.clear
+    @guardians.push(guardian.id) if guardian
+    @guardians.compact!
+    refresh
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: pair
+  #--------------------------------------------------------------------------
+  def pair(guardian)
+    return if guardians.include?(guardian)
+    clear_guardians
+    @guardians.push(guardian.id)
+    guardian.pair_actor = self.id
+    refresh
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: clear_guardians
+  #--------------------------------------------------------------------------
+  def clear_guardians
+    guardians.each { |g| g.pair_actor = nil }
+    @guardians.clear
+  end
+    
+  #--------------------------------------------------------------------------
+  # alias method: gain_exp
+  #--------------------------------------------------------------------------
+  alias yse_gain_exp_gp gain_exp
+  def gain_exp(exp)
+    yse_gain_exp_gp(exp)
+    return if guardian?
+    guardians.each { |guardian|
+      guardian.gain_guardian_exp(guardian, exp)
+    }
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: gain_guardian_exp
+  #--------------------------------------------------------------------------
+  def gain_guardian_exp(guardian,exp)
+    return if YSE::GUARDIAN::ALL_GUARDIAN_GAIN_EXP
+    guardian.gain_exp(exp)
+  end
+  
+end # Game_Actor
+
+#==============================================================================
+# ■ Game_Party
+#==============================================================================
+
+class Game_Party < Game_Unit
+  
+  #--------------------------------------------------------------------------
+  # alias method: remove_actor
+  #--------------------------------------------------------------------------  
+  alias yse_remove_actor_gp remove_actor
+  def remove_actor(actor_id)
+    if $game_actors[actor_id].guardian? && $game_actors[actor_id].is_pair?
+      $game_actors[actor_id].paired_actor.clear_guardians
+    end
+    yse_remove_actor_gp(actor_id)
+  end
+  
+end # Game_Party
+
+#==============================================================================
+# ■ Window_Base
+#==============================================================================
+
+class Window_Base < Window
+  
+  #--------------------------------------------------------------------------
+  # new method: draw_actor_guardian
+  #--------------------------------------------------------------------------
+  def draw_actor_guardian(actor, x, y, width = 180)
+    change_color(normal_color)
+    str = Vocab::PairedGuardian
+    if actor.guardian?
+      name = actor.paired_actor.nil? ? Vocab::NonPaired : actor.paired_actor.name
+    else
+      name = actor.first_guardian.nil? ? Vocab::NonPaired : actor.first_guardian.name
+    end
+    str =  sprintf(str, name)
+    draw_text(x, y, width, line_height, str, 2)
+  end
+  
+end # Window_Base
+  
+#==============================================================================
+# ■ Window_GuardianPairingMenuCommand
+#==============================================================================
+
+class Window_GuardianPairingMenuCommand < Window_Command
+  
+  #--------------------------------------------------------------------------
+  # initialize
+  #--------------------------------------------------------------------------
+  def initialize(dx, dy)
+    super(dx, dy)
+  end
+  
+  #--------------------------------------------------------------------------
+  # window_width
+  #--------------------------------------------------------------------------
+  def window_width; return 160; end
+  
+  #--------------------------------------------------------------------------
+  # visible_line_number
+  #--------------------------------------------------------------------------
+  def visible_line_number; return 4; end
+    
+  #--------------------------------------------------------------------------
+  # alignment
+  #--------------------------------------------------------------------------
+  def alignment; return 1; end
+  
+  #--------------------------------------------------------------------------
+  # ok_enabled?
+  #--------------------------------------------------------------------------
+  def ok_enabled?
+    return handle?(current_symbol)
+  end
+  
+  #--------------------------------------------------------------------------
+  # process_ok
+  #--------------------------------------------------------------------------
+  def process_ok
+    $game_temp.guardian_pairing_menu_command = self.index
+    super
+  end
+  
+  #--------------------------------------------------------------------------
+  # make_command_list
+  #--------------------------------------------------------------------------
+  def make_command_list
+    for command in YSE::GUARDIAN_PAIRING::COMMANDS
+      enable = command[0] == :pair ? $game_party.guardians.size > 0 : $game_party.target_actor.is_pair?
+      add_command(command[1], command[0], enable)
+    end
+  end
+  
+end # Window_GuardianPairingMenuCommand
+
+#==============================================================================
+# ■ Window_MenuGuardianPair
+#==============================================================================
+
+class Window_MenuGuardianPair < Window_MenuGuardian
+  
+  #--------------------------------------------------------------------------
+  # window_width
+  #--------------------------------------------------------------------------
+  def window_width
+    Graphics.width
+  end
+  
+  #--------------------------------------------------------------------------
+  # col_max
+  #--------------------------------------------------------------------------
+  def col_max
+    2
+  end
+  
+  #--------------------------------------------------------------------------
+  # unpair=
+  #--------------------------------------------------------------------------
+  def unpair=(flag)
+    @unpair = flag
+    refresh
+  end
+  
+  #--------------------------------------------------------------------------
+  # enable?
+  #--------------------------------------------------------------------------
+  def enable?(actor)
+    @unpair ? actor.is_pair? : !actor.is_pair?
+  end
+  
+  #--------------------------------------------------------------------------
+  # current_item_enabled?
+  #--------------------------------------------------------------------------
+  def current_item_enabled?
+    enable?($game_party.guardians[index])
+  end
+  
+  #--------------------------------------------------------------------------
+  # draw_guardian_status
+  #--------------------------------------------------------------------------
+  def draw_guardian_status(actor, dx, dy, dw)
+    change_color(normal_color)
+    draw_actor_guardian(actor, dx, dy, dw)
+  end
+  
+  #--------------------------------------------------------------------------
+  # process_ok
+  #--------------------------------------------------------------------------
+  def process_ok
+    $game_party.menu_actor = $game_party.guardians[index]
+    $game_temp.scene_gmenu_id = $game_party.guardians[index].id
+    super
+  end
+  
+end # Window_MenuGuardianPair
+
+#==============================================================================
+# ■ Window_PairingStatus
+#==============================================================================
+
+class Window_PairingStatus < Window_SkillStatus
+  
+  #--------------------------------------------------------------------------
+  # draw_actor_simple_status
+  #--------------------------------------------------------------------------
+  def draw_actor_simple_status(actor, dx, dy)
+    draw_actor_name(actor, dx, dy)
+    draw_actor_level(actor, dx, dy + line_height * 1)
+    dw = contents.width - dx - 124
+    draw_actor_guardian(actor, dx + 120, dy, dw)
+    draw_actor_hp(actor, dx + 120, dy + line_height * 1, dw)
+    draw_actor_mp(actor, dx + 120, dy + line_height * 2, dw)
+  end
+  
+end # Window_PairingStatus
+
+#==============================================================================
+# ■ Scene_GuardianPairing
+#==============================================================================
+
+class Scene_GuardianPairing < Scene_MenuBase
+  
+  #--------------------------------------------------------------------------
+  # start
+  #--------------------------------------------------------------------------
+  def start
+    super
+    create_help_window
+    create_command_window
+    create_status_window
+    create_guardian_window
+  end
+  
+  #--------------------------------------------------------------------------
+  # create_command_window
+  #--------------------------------------------------------------------------
+  def create_command_window
+    wy = @help_window.height
+    @command_window = Window_GuardianPairingMenuCommand.new(0, wy)
+    @command_window.viewport = @viewport
+    @command_window.set_handler(:cancel,   method(:return_scene))
+    @command_window.set_handler(:pair,   method(:command_pair))
+    @command_window.set_handler(:unpair,   method(:command_unpair))
+    if $imported["YSE-GuardianEsperLearning"]
+      @command_window.set_handler(:skill,   method(:command_esperskill))
+    end
+    if $game_temp.guardian_pairing_menu_command
+      @command_window.index = $game_temp.guardian_pairing_menu_command
+      $game_temp.guardian_pairing_menu_command = nil
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # create_status_window
+  #--------------------------------------------------------------------------
+  def create_status_window
+    wy = @help_window.height
+    @status_window = Window_PairingStatus.new(@command_window.width, wy)
+    @status_window.viewport = @viewport
+    @status_window.actor = $game_party.target_actor
+  end
+  
+  #--------------------------------------------------------------------------
+  # create_guardian_window
+  #--------------------------------------------------------------------------
+  def create_guardian_window
+    wx = $imported["YSE-GuardianBoostStats"] ? 232 : 0
+    wy = @command_window.height + @command_window.y
+    @guardian_window = Window_MenuGuardianPair.new(wx, wy)
+    @guardian_window.viewport = @viewport
+    @guardian_window.help_window = @help_window
+    @guardian_window.update_help
+  end
+  
+  #--------------------------------------------------------------------------
+  # command_actor
+  #--------------------------------------------------------------------------
+  def command_unpair
+    process_unpair
+  end
+  
+  #--------------------------------------------------------------------------
+  # command_pair
+  #--------------------------------------------------------------------------
+  def command_pair
+    @guardian_window.activate
+    @guardian_window.select_last
+    @guardian_window.set_handler(:ok,     method(:on_guardian_ok))
+    @guardian_window.set_handler(:cancel, method(:on_guardian_cancel))
+  end
+  
+  #--------------------------------------------------------------------------
+  # on_guardian_ok
+  #--------------------------------------------------------------------------
+  def on_guardian_ok
+    case @command_window.current_symbol
+    when :pair
+      if not $game_party.menu_actor.is_pair?
+        process_pair
+      else
+        Sound.play_buzzer
+      end
+    when :unpair
+      if $game_party.target_actor.is_pair?
+        process_unpair
+      else
+        Sound.play_buzzer
+      end
+    end
+    @guardian_window.unpair = false
+  end
+  
+  #--------------------------------------------------------------------------
+  # on_guardian_cancel
+  #--------------------------------------------------------------------------
+  def on_guardian_cancel
+    @guardian_window.unselect
+    @guardian_window.unpair = false
+    @command_window.activate
+  end
+  
+  #--------------------------------------------------------------------------
+  # process_pair
+  #--------------------------------------------------------------------------
+  def process_pair
+    $game_party.target_actor.pair($game_party.menu_actor)
+    @command_window.refresh
+    @guardian_window.activate
+    @guardian_window.select_last
+    @status_window.refresh
+  end
+  
+  #--------------------------------------------------------------------------
+  # process_unpair
+  #--------------------------------------------------------------------------
+  def process_unpair
+    $game_party.target_actor.clear_guardians
+    @command_window.refresh
+    @command_window.activate
+    @guardian_window.refresh
+    @status_window.refresh
+  end
+  
+end # Scene_GuardianPairing
+
+#==============================================================================
+# 
+# ▼ End of File
+# 
+#==============================================================================

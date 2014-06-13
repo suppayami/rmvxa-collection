@@ -1,0 +1,612 @@
+﻿#==============================================================================
+# 
+# ▼ Yami Engine Ace - Guardian Series
+# -- Script: Guardian Basic
+# -- Last Updated: 2012.08.02
+# -- Level: Easy
+# -- Requires: n/a
+# 
+#==============================================================================
+
+$imported = {} if $imported.nil?
+$imported["YSE-GuardianBasic"] = true
+
+#==============================================================================
+# ▼ Updates
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2012.08.02 - Fixed on Face Drawing.
+# 2012.06.27 - Reduced lag on all Guardian Scene.
+# 2012.05.12 - Fixed Compatible script: YEA - Party System.
+# 2012.04.08 - Fixed last choosen.
+# 2012.04.07 - Added custom script to recover all guardians.
+# 2012.04.02 - Fixed Remove Guardian.
+# 2012.03.30 - Compatible script: YSE - Guardian Summon.
+# 2012.03.26 - Compatible script: YEA - Party System.
+# 2012.03.20 - Fixed EXP Gaining.
+# 2012.03.11 - Finished Script.
+# 2012.03.05 - Started Script.
+# 
+#==============================================================================
+# ▼ Introduction
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script gives you a notetag for Actors to make them be guardians. An actor
+# marked as guardian is not shown in default menu, battle, but will be available
+# for other scripts in Guardian Series.
+#
+# This script also contains two basic windows for Guardians:
+#   - Window Guardians List. Class Window_MenuGuardian
+#   - Window Guardian Small Status. Class Window_StatusGuardian
+#
+# To recover guardians, you have to call this script by event to recover entire 
+# guardians:
+#========================================
+#     YSE.recover_guardians
+#  or
+#     $game_party.recover_guardians
+#========================================
+#
+# -----------------------------------------------------------------------------
+# Actor Notetags - These notetags go in the actor notebox in the database.
+# ----------------------------------------------------------------------------- 
+# <guardian>
+# This notetag marks an actor as a guardian.
+#
+#==============================================================================
+# ▼ Instructions
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# To install this script, open up your script editor and copy/paste this script
+# to an open slot below ▼ Materials/素材 but above ▼ Main. Remember to save.
+#
+#==============================================================================
+# ▼ Compatibility
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script is made strictly for RPG Maker VX Ace. It is highly unlikely that
+# it will run with RPG Maker VX without adjusting.
+# 
+#==============================================================================
+
+module YSE
+  module GUARDIAN
+    
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    # - Mechanic Settings -
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    ALL_GUARDIAN_GAIN_EXP     = true
+    
+  end
+end
+
+#==============================================================================
+# ▼ Editting anything past this point may potentially result in causing
+# computer damage, incontinence, explosion of user's head, coma, death, and/or
+# halitosis so edit at your own risk.
+#==============================================================================
+
+#==============================================================================
+# ■ Regular Expression
+#==============================================================================
+
+module YSE
+  module REGEXP
+    module ACTOR
+      GUARDIAN = /<(?:GUARDIAN)>/i
+    end # ACTOR
+  end # REGEXP
+end # YSE
+
+#==============================================================================
+# ■ YSE
+#==============================================================================
+
+module YSE
+  
+  #--------------------------------------------------------------------------
+  # recover_guardians
+  #--------------------------------------------------------------------------
+  def self.recover_guardians
+    $game_party.recover_guardians
+  end
+  
+end # YSE
+
+#==============================================================================
+# ■ Cache
+#==============================================================================
+
+module Cache
+  
+  #--------------------------------------------------------------------------
+  # new method: storage_gface
+  #--------------------------------------------------------------------------
+  def self.storage_gface(bitmap, name)
+    @gface_cache ||= {}
+    @gface_cache[name] = bitmap unless @gface_cache.has_key?(name)
+    @gface_cache[name]
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: storage_gface
+  #--------------------------------------------------------------------------
+  def self.restore_gface(name)
+    return false if @gface_cache.nil? || !@gface_cache.has_key?(name)
+    @gface_cache[name]
+  end
+  
+end
+
+#==============================================================================
+# ■ BattleManager
+#==============================================================================
+
+module BattleManager
+  
+  #--------------------------------------------------------------------------
+  # alias method: gain_exp
+  #--------------------------------------------------------------------------
+  class <<self; alias yse_gain_exp_gb gain_exp; end
+  def self.gain_exp
+    $game_party.guardians.each do |guardian| 
+      guardian.gain_exp($game_troop.exp_total) if YSE::GUARDIAN::ALL_GUARDIAN_GAIN_EXP
+    end
+    yse_gain_exp_gb
+  end
+  
+end # BattleManager
+
+#==============================================================================
+# ■ Game_Temp
+#==============================================================================
+
+class Game_Temp
+  
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_accessor :scene_gmenu_id
+  
+  #--------------------------------------------------------------------------
+  # alias method: initialize
+  #--------------------------------------------------------------------------
+  alias yse_initialize_gb initialize
+  def initialize
+    yse_initialize_gb
+    @scene_gmenu_id = 0
+  end
+  
+end # Game_Temp
+
+#==============================================================================
+# ■ DataManager
+#==============================================================================
+
+module DataManager
+  
+  #--------------------------------------------------------------------------
+  # alias method: load_database
+  #--------------------------------------------------------------------------
+  class <<self; alias load_database_ysegb load_database; end
+  def self.load_database
+    load_database_ysegb
+    load_notetags_ysegb
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: load_notetags_ysegb
+  #--------------------------------------------------------------------------
+  def self.load_notetags_ysegb
+    group = $data_actors
+    for obj in group
+      next if obj.nil?
+      obj.load_notetags_ysegb
+    end
+  end
+  
+end # DataManager
+
+#==============================================================================
+# ■ RPG::Actor
+#==============================================================================
+
+class RPG::Actor < RPG::BaseItem
+  
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_accessor :is_guardian
+
+  #--------------------------------------------------------------------------
+  # new method: load_notetags_ysegb
+  #--------------------------------------------------------------------------
+  def load_notetags_ysegb
+    @is_guardian = false
+    #---
+    self.note.split(/[\r\n]+/).each { |line|
+      case line
+      #---
+      when YSE::REGEXP::ACTOR::GUARDIAN
+        @is_guardian = true
+      end
+    } # self.note.split
+    #---
+  end
+  
+end # RPG::Actor
+
+#==============================================================================
+# ■ Game_Actor
+#==============================================================================
+
+class Game_Actor < Game_Battler
+  
+  #--------------------------------------------------------------------------
+  # new method: guardian?
+  #--------------------------------------------------------------------------
+  def guardian?
+    return actor.is_guardian
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: guardian_index
+  #--------------------------------------------------------------------------
+  def guardian_index
+    $game_party.guardians.index(self)
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: reserve_members_exp_rate
+  #--------------------------------------------------------------------------
+  alias yse_reserve_members_exp_rate_gb reserve_members_exp_rate
+  def reserve_members_exp_rate
+    guardian? ? guardian_exp_rate : yse_reserve_members_exp_rate_gb
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: guardian_exp_rate
+  #--------------------------------------------------------------------------
+  def guardian_exp_rate
+    1
+  end
+  
+end # Game_Actor
+
+#==============================================================================
+# ■ Game_Party
+#==============================================================================
+
+class Game_Party < Game_Unit
+  
+  #--------------------------------------------------------------------------
+  # alias method: initialize
+  #--------------------------------------------------------------------------  
+  alias yse_initialize_gb initialize
+  def initialize
+    yse_initialize_gb
+    @guardians = []
+  end
+
+  #--------------------------------------------------------------------------
+  # alias method: all_members
+  #-------------------------------------------------------------------------- 
+  alias yse_all_members_gb all_members
+  def all_members
+    filter_guardians
+    yse_all_members_gb
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: filter_guardians
+  #--------------------------------------------------------------------------  
+  def filter_guardians
+    hash = @actors.dup
+    @actors.each {|id| 
+      if $game_actors[id].guardian?; @actors.delete(id); add_actor(id); end
+    }
+    return unless $imported["YEA-PartySystem"]
+    initialize_battle_members if @actors != hash
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: guardians
+  #--------------------------------------------------------------------------  
+  def guardians
+    @guardians.collect {|id| $game_actors[id] }
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: add_actor
+  #--------------------------------------------------------------------------  
+  alias yse_add_actor_gb add_actor
+  def add_actor(actor_id)
+    if $game_actors[actor_id].guardian?
+      @guardians.push(actor_id) unless @guardians.include?(actor_id)
+      return
+    end
+    yse_add_actor_gb(actor_id)
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: remove_actor
+  #--------------------------------------------------------------------------  
+  alias yse_remove_actor_gb remove_actor
+  def remove_actor(actor_id)
+    if $game_actors[actor_id].guardian?
+      @guardians.delete(actor_id) if @guardians.include?(actor_id)
+      return
+    end
+    yse_remove_actor_gb(actor_id)
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: menu_guardian
+  #--------------------------------------------------------------------------  
+  def menu_guardian
+    $game_temp.scene_gmenu_id = 0 if !@guardians.include?($game_temp.scene_gmenu_id)
+    $game_actors[$game_temp.scene_gmenu_id].nil? ? guardians[0] : $game_actors[$game_temp.scene_gmenu_id]
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: menu_guardian_next
+  #--------------------------------------------------------------------------  
+  def menu_guardian_next
+    index = guardians.index(menu_actor) || -1
+    index = (index + 1) % guardians.size
+    self.menu_actor = guardians[index]
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: menu_guardian_prev
+  #--------------------------------------------------------------------------  
+  def menu_guardian_prev
+    index = guardians.index(menu_actor) || 1
+    index = (index + guardians.size - 1) % guardians.size
+    self.menu_actor = guardians[index]
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: menu_actor_next
+  #--------------------------------------------------------------------------
+  alias yse_menu_actor_next_gb menu_actor_next
+  def menu_actor_next
+    if @guardians.include?(menu_actor.id)
+      menu_guardian_next
+    else
+      yse_menu_actor_next_gb
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: menu_actor_prev
+  #--------------------------------------------------------------------------
+  alias yse_menu_actor_prev_gb menu_actor_prev
+  def menu_actor_prev
+    if @guardians.include?(menu_actor.id)
+      menu_guardian_prev
+    else
+      yse_menu_actor_prev_gb
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: recover_guardians
+  #--------------------------------------------------------------------------
+  def recover_guardians
+    guardians.each { |guardian| guardian.recover_all }
+  end
+  
+end # Game_Party
+
+#==============================================================================
+# ■ Window_MenuGuardian
+#==============================================================================
+
+class Window_MenuGuardian < Window_Selectable
+  
+  #--------------------------------------------------------------------------
+  # initialize
+  #--------------------------------------------------------------------------
+  def initialize(x, y)
+    super(x, y, window_width, window_height)
+    refresh
+  end
+  
+  #--------------------------------------------------------------------------
+  # window_width
+  #--------------------------------------------------------------------------
+  def window_width
+    Graphics.width
+  end
+  
+  #--------------------------------------------------------------------------
+  # window_height
+  #--------------------------------------------------------------------------
+  def window_height
+    Graphics.height
+  end
+  
+  #--------------------------------------------------------------------------
+  # item_max
+  #--------------------------------------------------------------------------
+  def item_max
+    $game_party.guardians.size
+  end
+  
+  #--------------------------------------------------------------------------
+  # col_max
+  #--------------------------------------------------------------------------
+  def col_max
+    2
+  end
+  
+  #--------------------------------------------------------------------------
+  # process_ok
+  #--------------------------------------------------------------------------
+  def process_ok
+    super
+  end
+  
+  #--------------------------------------------------------------------------
+  # draw_item
+  #--------------------------------------------------------------------------
+  def draw_item(index)
+    guardian = $game_party.guardians[index]
+    rect = item_rect(index)
+    face_rect = Rect.new(rect.x + 1, rect.y + 1, item_height - 2, item_height - 2)
+    draw_guardian_name(guardian, rect.x, rect.y, rect.width)
+    draw_thumb_face(guardian, face_rect)
+    draw_guardian_status(guardian, rect.x, rect.y, rect.width)
+  end
+  
+  #--------------------------------------------------------------------------
+  # draw_thumb_face
+  #--------------------------------------------------------------------------
+  def draw_thumb_face(actor, dest_rect)
+    cache = Cache.restore_gface(actor.face_name + actor.face_index.to_s)
+    if !cache
+      bitmap = Cache.face(actor.face_name)
+      rect = Rect.new(actor.face_index % 4 * 96, actor.face_index / 4 * 96, 96, 96)
+      bitmap.blur
+      cache = Bitmap.new(dest_rect.width, dest_rect.height)
+      cache.stretch_blt(Rect.new(0,0,dest_rect.width, dest_rect.height), bitmap, rect) 
+      Cache.storage_gface(cache, actor.face_name + actor.face_index.to_s)
+      bitmap.dispose
+    end
+    contents.stretch_blt(dest_rect, cache, Rect.new(0,0,cache.width,cache.height), enable?(actor) ? 255 : translucent_alpha) 
+  end
+  
+  #--------------------------------------------------------------------------
+  # draw_guardian_name
+  #--------------------------------------------------------------------------
+  def draw_guardian_name(actor, dx, dy, dw)
+    colour = Color.new(0, 0, 0, translucent_alpha/2)
+    rect = Rect.new(dx+1, dy+1, dw-2, line_height-2)
+    contents.fill_rect(rect, colour)
+    change_color(system_color, enable?(actor))
+    draw_text(dx + item_height + 2, dy, dw, line_height, actor.name)
+  end
+  
+  #--------------------------------------------------------------------------
+  # draw_guardian_status
+  #--------------------------------------------------------------------------
+  def draw_guardian_status(actor, dx, dy, dw)
+    change_color(normal_color, enable?(actor))
+    draw_text(dx, dy, dw, line_height, Vocab::level_a + actor.level.to_s, 2)
+  end
+  
+  #--------------------------------------------------------------------------
+  # enable?
+  #--------------------------------------------------------------------------
+  def enable?(actor = nil)
+    return true
+  end
+  
+  #--------------------------------------------------------------------------
+  # update_help
+  #--------------------------------------------------------------------------
+  alias yse_call_update_help_gb call_update_help
+  def call_update_help
+    yse_call_update_help_gb
+    return if @status_window.nil?
+    return if $game_party.guardians.size == 0
+    item = index < 0 ? $game_party.menu_guardian : $game_party.guardians[index]
+    @status_window.guardian = item
+  end
+  
+  #--------------------------------------------------------------------------
+  # update_help
+  #--------------------------------------------------------------------------
+  def update_help
+    @help_window.clear
+    item = index < 0 ? $game_party.menu_guardian : $game_party.guardians[index]
+    @help_window.set_item(item)
+  end
+  
+  #--------------------------------------------------------------------------
+  # select_last
+  #--------------------------------------------------------------------------
+  def select_last
+    select($game_party.menu_guardian.guardian_index)
+  end
+  
+  #--------------------------------------------------------------------------
+  # status_window=
+  #--------------------------------------------------------------------------
+  def status_window=(status_window)
+    @status_window = status_window
+    item = index < 0 ? $game_party.menu_guardian : $game_party.guardians[index]
+    @status_window.guardian = item
+  end
+  
+end # Window_MenuGuardian
+
+#==============================================================================
+# ■ Window_StatusGuardian
+#==============================================================================
+
+class Window_StatusGuardian < Window_Base
+  
+  #--------------------------------------------------------------------------
+  # initialize
+  #--------------------------------------------------------------------------
+  def initialize(dx, dy)
+    @guardian = $game_party.menu_guardian
+    super(dx, dy, window_width, fitting_height(4))
+    refresh
+  end
+  
+  #--------------------------------------------------------------------------
+  # window_width
+  #--------------------------------------------------------------------------
+  def window_width; return Graphics.width - 160; end
+  
+  #--------------------------------------------------------------------------
+  # guardian=
+  #--------------------------------------------------------------------------
+  def guardian=(guardian)
+    return if @guardian == guardian
+    @guardian = guardian
+    refresh
+  end
+  
+  #--------------------------------------------------------------------------
+  # refresh
+  #--------------------------------------------------------------------------
+  def refresh
+    contents.clear
+    return unless @guardian
+    draw_actor_face(@guardian, 0, 0)
+    colour = Color.new(0, 0, 0, translucent_alpha / 2)
+    rect = Rect.new(0, line_height * 3 + 2, 106, line_height-2)
+    contents.fill_rect(rect, colour)
+    draw_actor_name(@guardian, 0, line_height * 3 + 1, 108)
+    dw = (contents.width - 108) / 2
+    dx = 108
+    draw_actor_param(0, dx, line_height * 0, dw)
+    draw_actor_param(1, dx + dw, line_height * 0, dw)
+    draw_actor_param(2, dx, line_height * 1, dw)
+    draw_actor_param(3, dx + dw, line_height * 1, dw)
+    draw_actor_param(4, dx, line_height * 2, dw)
+    draw_actor_param(5, dx + dw, line_height * 2, dw)
+    draw_actor_param(6, dx, line_height * 3, dw)
+    draw_actor_param(7, dx + dw, line_height * 3, dw)
+  end
+  
+  #--------------------------------------------------------------------------
+  # draw_actor_param
+  #--------------------------------------------------------------------------
+  def draw_actor_param(param_id, dx, dy, dw)
+    colour = Color.new(0, 0, 0, translucent_alpha/2)
+    rect = Rect.new(dx+1, dy+1, dw-2, line_height-2)
+    contents.fill_rect(rect, colour)
+    change_color(system_color)
+    draw_text(dx+4, dy, dw-8, line_height, Vocab::param(param_id))
+    change_color(normal_color)
+    draw_text(dx+4, dy, dw-8, line_height, @guardian.param(param_id).to_s, 2)
+  end
+  
+end # Window_StatusGuardian
+
+#==============================================================================
+# 
+# ▼ End of File
+# 
+#==============================================================================

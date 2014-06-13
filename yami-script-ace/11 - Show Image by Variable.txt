@@ -1,0 +1,255 @@
+#==============================================================================
+# 
+# Å• Yami Engine Ace - Show Image by Variable
+# -- Last Updated: 2012.03.27
+# -- Level: Easy
+# -- Requires: none
+# 
+#==============================================================================
+
+$imported = {} if $imported.nil?
+$imported["YSE-ShowImgVariable"] = true
+
+#==============================================================================
+# Å• Updates
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2012.03.27 - Added Above Characters Switch.
+# 2012.03.24 - Started and Finished Script.
+# 
+#==============================================================================
+# Å• Introduction
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script will show a picture on map or battle which can be changed by
+# a variable.
+#
+#==============================================================================
+# Å• Instructions
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# To install this script, open up your script editor and copy/paste this script
+# to an open slot below Å• Materials/ëfçﬁ but above Å• Main. Remember to save.
+#
+#==============================================================================
+# Å• Compatibility
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script is made strictly for RPG Maker VX Ace. It is highly unlikely that
+# it will run with RPG Maker VX without adjusting.
+# 
+#==============================================================================
+
+module YSE
+  module IMAGE_VARIABLE
+    
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    # - Variable and Switch Settings -
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    VARIABLE_SWITCH = { # Start
+      :show_switch        =>  0,  # Set to 0 to disable this.
+      :img_variable       =>  2,
+      :above_char_switch  =>  0,  # Set to 0 to disable this.
+    } # End
+    
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    # - Images Settings -
+    # This Images Hash will mark a picture as an integer to be used in Variable.
+    # You have to copy those pictures to Graphics/Pictures
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    IMAGES_HASH = { # Start
+      1..10   =>  "First",
+      11      =>  "Last",
+    } # End
+    
+    # Do not edit anything below this part.
+    IMAGES_HASH = YSE.parse_range(IMAGES_HASH)
+    # End.
+  end
+end
+
+#==============================================================================
+# Å• Editting anything past this point may potentially result in causing
+# computer damage, incontinence, explosion of user's head, coma, death, and/or
+# halitosis so edit at your own risk.
+#==============================================================================
+if YSE::IMAGE_VARIABLE::VARIABLE_SWITCH[:img_variable] <= 0
+  YSE.message_box("YSE - Show Image by Variable", "You must change :img_variable properly in order to make this script works.")
+  exit
+end
+
+#==============================================================================
+# Å° Switches
+#==============================================================================
+module Switches
+  module IMAGE_VARIABLE
+    def self.show?
+      id = YSE::IMAGE_VARIABLE::VARIABLE_SWITCH[:show_switch]
+      id > 0 ? $game_switches[id] : true
+    end
+    def self.above_char?
+      id = YSE::IMAGE_VARIABLE::VARIABLE_SWITCH[:above_char_switch]
+      id > 0 ? $game_switches[id] : true
+    end
+  end
+end
+
+#==============================================================================
+# Å° Spriteset_Map
+#==============================================================================
+
+class Sprite_Image_Variable < Sprite
+  
+  #--------------------------------------------------------------------------
+  # initialize
+  #--------------------------------------------------------------------------
+  def initialize(viewport)
+    super(viewport)
+    self.visible = Switches::IMAGE_VARIABLE.show?
+    refresh
+  end
+  
+  #--------------------------------------------------------------------------
+  # refresh
+  #--------------------------------------------------------------------------
+  def refresh
+    id = YSE::IMAGE_VARIABLE::VARIABLE_SWITCH[:img_variable]
+    hash = YSE::IMAGE_VARIABLE::IMAGES_HASH
+    @var = $game_variables[id]
+    self.bitmap.dispose if self.bitmap
+    return unless hash[@var]
+    bitmap = Cache.picture(hash[@var])
+    self.bitmap = bitmap
+  end
+  
+  #--------------------------------------------------------------------------
+  # update
+  #--------------------------------------------------------------------------
+  def update
+    id = YSE::IMAGE_VARIABLE::VARIABLE_SWITCH[:img_variable]
+    self.visible = Switches::IMAGE_VARIABLE.show?
+    return if @var == $game_variables[id]
+    refresh
+  end
+  
+end # Sprite_Image_Variable
+
+#==============================================================================
+# Å° Spriteset_Map
+#==============================================================================
+
+class Spriteset_Map
+  
+  #--------------------------------------------------------------------------
+  # alias method: create_timer
+  #--------------------------------------------------------------------------
+  alias yse_create_timer_sibv create_timer
+  def create_timer
+    yse_create_timer_sibv
+    create_img_variable
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: dispose
+  #--------------------------------------------------------------------------
+  alias yse_dispose_sibv dispose
+  def dispose
+    yse_dispose_sibv
+    dispose_img_variable
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: update
+  #--------------------------------------------------------------------------
+  alias yse_update_sibv update
+  def update
+    yse_update_sibv
+    update_img_variable
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: create_img_variable
+  #--------------------------------------------------------------------------
+  def create_img_variable
+    @img_var = Sprite_Image_Variable.new(@viewport1)
+    @img_var.z = Switches::IMAGE_VARIABLE.above_char? ? 1000 : 0
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: dispose_img_variable
+  #--------------------------------------------------------------------------
+  def dispose_img_variable
+    @img_var.bitmap.dispose if @img_var.bitmap
+    @img_var.dispose
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: update_img_variable
+  #--------------------------------------------------------------------------
+  def update_img_variable
+    return unless @img_var
+    @img_var.update
+  end
+  
+end # Spriteset_Map
+
+#==============================================================================
+# Å° Spriteset_Battle
+#==============================================================================
+
+class Spriteset_Battle
+  
+  #--------------------------------------------------------------------------
+  # alias method: create_timer
+  #--------------------------------------------------------------------------
+  alias yse_create_timer_sibv create_timer
+  def create_timer
+    yse_create_timer_sibv
+    create_img_variable
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: dispose
+  #--------------------------------------------------------------------------
+  alias yse_dispose_sibv dispose
+  def dispose
+    yse_dispose_sibv
+    dispose_img_variable
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: update
+  #--------------------------------------------------------------------------
+  alias yse_update_sibv update
+  def update
+    yse_update_sibv
+    update_img_variable
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: create_img_variable
+  #--------------------------------------------------------------------------
+  def create_img_variable
+    @img_var = Sprite_Image_Variable.new(@viewport1)
+    @img_var.z = Switches::IMAGE_VARIABLE.above_char? ? 1000 : 2
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: dispose_img_variable
+  #--------------------------------------------------------------------------
+  def dispose_img_variable
+    @img_var.bitmap.dispose if @img_var.bitmap
+    @img_var.dispose
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: update_img_variable
+  #--------------------------------------------------------------------------
+  def update_img_variable
+    return unless @img_var
+    @img_var.update
+  end
+  
+end # Spriteset_Battle
+
+#==============================================================================
+# 
+# Å• End of File
+# 
+#==============================================================================

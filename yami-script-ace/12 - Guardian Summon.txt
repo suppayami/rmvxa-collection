@@ -1,0 +1,809 @@
+#==============================================================================
+# 
+# Å• Yami Engine Ace - Guardian Series
+# -- Script: Guardian Summon
+# -- Last Updated: 2012.05.23
+# -- Level: Easy
+# -- Requires: n/a
+# 
+#==============================================================================
+
+$imported = {} if $imported.nil?
+$imported["YSE-GuardianSummon"] = true
+
+#==============================================================================
+# Å• Updates
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2012.05.23 - Added Devil Survivor Summoning Style.
+# 2012.05.17 - Fixed a glitch with skills window.
+# 2012.04.05 - Fixed Crashed bug when a guardian die.
+# 2012.04.02 - Finished Script.
+# 2012.03.29 - Started Script.
+# 
+#==============================================================================
+# Å• Introduction
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# Provides a summon skill that can make a guardian to take part in battle.
+# Guardian can take place of an actor, or replace the whole party (like FFX Aeons).
+# There also a compatible feature that make summoning skill only summon paired
+# guardian (Require Yami Engine - Guardian Pairing).
+#
+#==============================================================================
+# Å• Instructions
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# To install this script, open up your script editor and copy/paste this script
+# to an open slot below Å• Materials/ëfçﬁ but above Å• Main. Remember to save.
+#
+# -----------------------------------------------------------------------------
+# Skill Notetags - These notetags go in the skill notebox in the database.
+# -----------------------------------------------------------------------------
+# <summon guardian> - Mark this skill as a summoning skill.
+# <return guardian> - Mark this skill as a return skill for guardian.
+#
+# -----------------------------------------------------------------------------
+# Actor Notetags - These notetags go in the actor notebox in the database.
+# -----------------------------------------------------------------------------
+# <summon animation: x> - Play animation x at enemies when summon this guardian.
+# <return animation: x> - Play animation x at enemies when return this guardian.
+#
+#==============================================================================
+# Å• Compatibility
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script is made strictly for RPG Maker VX Ace. It is highly unlikely that
+# it will run with RPG Maker VX without adjusting.
+# 
+#==============================================================================
+
+module YSE
+  module GUARDIAN_SUMMON
+    
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    # - Summon Settings -
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    SUMMON_CONFIGURATION = { # Start.
+      :summon_paired    =>  false,  # Require YSE - Guardian Pairing
+      :aeon_party       =>  false,  # When summoned, all other party members
+                                    # will not take part in battle until guardian
+                                    # go back. This is alike FFX Aeon Summoning.
+      :ds_summon        =>  true,   # Devil Survivor summon style. The summoning
+                                    # will not replace summoner.
+      :default_summon_ani =>  0, # Use 0 to disable.
+      :default_return_ani =>  0, # Use 0 to disable.
+      :summon_text      =>  "%s is summoning %s!",
+      :return_text      =>  "%s returns.",
+      :fail_text        =>  "%s failed at summoning.",
+    } # Done.
+    
+  end
+end  
+
+#==============================================================================
+# Å• Editting anything past this point may potentially result in causing
+# computer damage, incontinence, explosion of user's head, coma, death, and/or
+# halitosis so edit at your own risk.
+#==============================================================================
+
+#==============================================================================
+# Å° Regular Expression
+#==============================================================================
+
+module YSE
+  module REGEXP
+  module USABLEITEM
+    
+    SUMMON_GUARDIAN = /<(?:SUMMON_GUARDIAN|summon guardian)>/i
+    RETURN_GUARDIAN = /<(?:RETURN_GUARDIAN|return guardian)>/i
+    
+  end # USABLEITEM
+  module ACTOR
+    
+    SUMMON_ANIMATION = /<(?:SUMMON_ANIMATION|summon animation):[ ](\d+)>/i
+    RETURN_ANIMATION = /<(?:RETURN_ANIMATION|return animation):[ ](\d+)>/i
+    
+  end # ACTOR
+  end # REGEXP
+end # YSE
+
+#==============================================================================
+# Å° Module YSE
+#==============================================================================
+
+module YSE
+  module GUARDIAN
+    
+    #--------------------------------------------------------------------------
+    # summon_paired?
+    #--------------------------------------------------------------------------
+    def self.summon_paired?
+      $imported["YSE-GuardianPairing"] ? YSE::GUARDIAN_SUMMON::SUMMON_CONFIGURATION[:summon_paired] : false
+    end
+    
+    #--------------------------------------------------------------------------
+    # aeon_party?
+    #--------------------------------------------------------------------------
+    def self.aeon_party?
+      YSE::GUARDIAN_SUMMON::SUMMON_CONFIGURATION[:aeon_party] && !YSE::GUARDIAN_SUMMON::SUMMON_CONFIGURATION[:ds_summon]
+    end
+    
+    #--------------------------------------------------------------------------
+    # ds_summon?
+    #--------------------------------------------------------------------------
+    def self.ds_summon?
+      YSE::GUARDIAN_SUMMON::SUMMON_CONFIGURATION[:ds_summon]
+    end
+    
+  end # GUARDIAN
+end # YSE
+
+#==============================================================================
+# Å° BattleManager
+#==============================================================================
+
+module BattleManager
+  
+  #--------------------------------------------------------------------------
+  # alias method: 
+  #   - process_abort
+  #   - process_defeat
+  #   - process_victory
+  #--------------------------------------------------------------------------
+  class<< self
+    alias yse_process_abort_gsummon process_abort
+    alias yse_process_defeat_gsummon process_defeat
+    alias yse_process_victory_gsummon process_victory
+  end
+  
+  #--------------------------------------------------------------------------
+  # process_abort
+  #--------------------------------------------------------------------------
+  def self.process_abort
+    SceneManager.scene.greturn_battle_end
+    yse_process_abort_gsummon
+  end
+  
+  #--------------------------------------------------------------------------
+  # process_defeat
+  #--------------------------------------------------------------------------
+  def self.process_defeat
+    if $game_party.aeons.size > 0
+      SceneManager.scene.greturn_battle_end
+      return
+    end
+    yse_process_defeat_gsummon
+  end
+  
+  #--------------------------------------------------------------------------
+  # process_victory
+  #--------------------------------------------------------------------------
+  def self.process_victory
+    SceneManager.scene.greturn_battle_end
+    yse_process_victory_gsummon
+  end
+  
+end # BattleManager
+
+#==============================================================================
+# Å° DataManager
+#==============================================================================
+
+module DataManager
+  
+  #--------------------------------------------------------------------------
+  # alias method: load_database
+  #--------------------------------------------------------------------------
+  class <<self; alias load_database_gsummon load_database; end
+  def self.load_database
+    load_database_gsummon
+    load_notetags_gsummon
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: load_notetags_gsummon
+  #--------------------------------------------------------------------------
+  def self.load_notetags_gsummon
+    groups = [$data_skills, $data_items]
+    for group in groups
+      for obj in group
+        next if obj.nil?
+        obj.load_notetags_gsummon
+      end
+    end
+    #---
+    for obj in $data_actors
+      next if obj.nil?
+      obj.load_notetags_gsummon
+    end
+  end
+  
+end # DataManager
+
+#==============================================================================
+# Å° RPG::Actor
+#==============================================================================
+
+class RPG::Actor < RPG::BaseItem
+  
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_accessor :summon_ani
+  attr_accessor :return_ani
+
+  #--------------------------------------------------------------------------
+  # new method: load_notetags_gsummon
+  #--------------------------------------------------------------------------
+  def load_notetags_gsummon
+    @summon_ani = YSE::GUARDIAN_SUMMON::SUMMON_CONFIGURATION[:default_summon_ani]
+    @return_ani = YSE::GUARDIAN_SUMMON::SUMMON_CONFIGURATION[:default_return_ani]
+    #---
+    self.note.split(/[\r\n]+/).each { |line|
+      case line
+      #---
+      when YSE::REGEXP::ACTOR::SUMMON_ANIMATION
+        @summon_ani = $1.to_i
+      when YSE::REGEXP::ACTOR::RETURN_ANIMATION
+        @return_ani = $1.to_i
+      end
+    } # self.note.split
+    #---
+  end
+  
+end # RPG::Actor
+
+#==============================================================================
+# Å° RPG::UsableItem
+#==============================================================================
+
+class RPG::UsableItem < RPG::BaseItem
+  
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_accessor :is_summon
+  attr_accessor :is_greturn
+  
+  #--------------------------------------------------------------------------
+  # common cache: load_notetags_gsummon
+  #--------------------------------------------------------------------------
+  def load_notetags_gsummon
+    #---
+    self.note.split(/[\r\n]+/).each { |line|
+      case line
+      #---
+      when YSE::REGEXP::USABLEITEM::SUMMON_GUARDIAN
+        @is_summon = true
+      when YSE::REGEXP::USABLEITEM::RETURN_GUARDIAN
+        @is_greturn = true
+      end
+    } # self.note.split
+    #---
+  end
+  
+end # RPG::UsableItem
+
+#==============================================================================
+# Å° Game_Actor
+#==============================================================================
+
+class Game_Action
+  
+  #--------------------------------------------------------------------------
+  # alias method: clear
+  #--------------------------------------------------------------------------
+  alias yse_clear_gsummon clear
+  def clear
+    yse_clear_gsummon
+    @summon_id = nil
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: summon_id
+  #--------------------------------------------------------------------------
+  def summon_id
+    $game_actors[@summon_id]
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: summon_id=
+  #--------------------------------------------------------------------------
+  def summon_id=(actor)
+    @summon_id = actor.nil? ? nil : actor.id
+  end
+  
+end # Game_Action
+
+#==============================================================================
+# Å° Game_Actor
+#==============================================================================
+
+class Game_Actor < Game_Battler
+  
+  #--------------------------------------------------------------------------
+  # new method: aeon
+  #--------------------------------------------------------------------------
+  def aeon
+    return self if guardian?
+    return self if @aeon.nil?
+    return $game_actors[@aeon]
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: summoner
+  #--------------------------------------------------------------------------
+  def summoner
+    return nil if @summoner.nil?
+    $game_actors[@summoner]
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: summoner=
+  #--------------------------------------------------------------------------
+  def summoner=(actor)
+    @summoner = actor.nil? ? nil : actor.id
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: aeon=
+  #--------------------------------------------------------------------------
+  def aeon=(actor)
+    @aeon = actor.nil? ? nil : actor.id
+    return if actor.nil?
+    actor.summoner = self
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: greturn
+  #--------------------------------------------------------------------------
+  def greturn
+    return unless summoner
+    summoner.aeon = nil
+    summoner = nil
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: skill_conditions_met?
+  #--------------------------------------------------------------------------
+  alias yse_skill_conditions_met_gsummon skill_conditions_met?
+  def skill_conditions_met?(skill)
+    if skill.is_summon
+      summon_conditions_met?
+    else
+      yse_skill_conditions_met_gsummon(skill)
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: summon_conditions_met?
+  #--------------------------------------------------------------------------
+  def summon_conditions_met?
+    if YSE::GUARDIAN.summon_paired?
+      return false if guardians.size <= 0
+    else
+      return false if $game_party.guardians.size <= 0
+    end
+    return true
+  end
+  
+end # Game_Actor
+
+#==============================================================================
+# Å° Game_Party
+#==============================================================================
+
+class Game_Party < Game_Unit
+  
+  #--------------------------------------------------------------------------
+  # alias method: initialize
+  #--------------------------------------------------------------------------
+  alias yse_initialize_gsummon initialize
+  def initialize
+    yse_initialize_gsummon
+    init_aeons
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: battle_members
+  #--------------------------------------------------------------------------
+  alias yse_battle_members_gsummon battle_members
+  def battle_members
+    if YSE::GUARDIAN.aeon_party?
+      @aeons.size > 0 ? aeons : yse_battle_members_gsummon
+    elsif YSE::GUARDIAN.ds_summon?
+      yse_battle_members_gsummon + aeons
+    else
+      yse_battle_members_gsummon.collect { |battler| battler.aeon }
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: init_aeons
+  #--------------------------------------------------------------------------
+  def init_aeons
+    @aeons = []
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: summon_aeon
+  #--------------------------------------------------------------------------
+  def summon_aeon(actor)
+    @aeons.push(actor.id)
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: aeons
+  #--------------------------------------------------------------------------
+  def aeons
+    @aeons.collect {|id| $game_actors[id] }
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: return_aeon
+  #--------------------------------------------------------------------------
+  def return_aeon(actor)
+    @aeons.delete(actor.id)
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: clear_aeons
+  #--------------------------------------------------------------------------
+  def clear_aeons
+    aeons.each { |aeon| aeon.greturn; aeon.summoner = nil }
+    @aeons.clear
+  end
+  
+end # Game_Party
+
+#==============================================================================
+# Å° Window_BattleSummon
+#==============================================================================
+
+class Window_BattleSummon < Window_MenuGuardian
+  
+  #--------------------------------------------------------------------------
+  # window_height
+  #--------------------------------------------------------------------------
+  def initialize(help_window)
+    y = help_window.height
+    super(0, y)
+    self.visible = false
+    @help_window = help_window
+  end
+  
+  #--------------------------------------------------------------------------
+  # window_width
+  #--------------------------------------------------------------------------
+  def window_width
+    Graphics.width
+  end
+  
+  #--------------------------------------------------------------------------
+  # window_height
+  #--------------------------------------------------------------------------
+  def window_height
+    Graphics.height - 64 - 128
+  end
+  
+  #--------------------------------------------------------------------------
+  # line_height
+  #--------------------------------------------------------------------------
+  def item_height
+    line_height * 2
+  end
+  
+  #--------------------------------------------------------------------------
+  # col_max
+  #--------------------------------------------------------------------------
+  def col_max
+    window_width > 544 ? 2 : 1
+  end
+  
+  #--------------------------------------------------------------------------
+  # draw_item
+  #--------------------------------------------------------------------------
+  def draw_item(index)
+    guardian = $game_party.guardians[index]
+    rect = item_rect(index)
+    face_rect = Rect.new(rect.x + 1, rect.y + 1, item_height - 2, item_height - 2)
+    draw_guardian_name(guardian, rect.x, rect.y, rect.width / 2)
+    draw_guardian_level(guardian, rect.x, rect.y + line_height, rect.width / 2)
+    draw_guardian_hp(guardian, rect.x + rect.width / 2 + 2, rect.y, rect.width / 2 - 2)
+    draw_guardian_mp(guardian, rect.x + rect.width / 2 + 2, rect.y + line_height, rect.width / 2 - 2)
+    draw_thumb_face(guardian, face_rect)
+  end
+  
+  #--------------------------------------------------------------------------
+  # draw_guardian_level
+  #--------------------------------------------------------------------------
+  def draw_guardian_level(actor, dx, dy, dw)
+    colour = Color.new(0, 0, 0, translucent_alpha/2)
+    rect = Rect.new(dx+1, dy+1, dw-2, line_height-2)
+    contents.fill_rect(rect, colour)
+    change_color(system_color, enable?(actor))
+    draw_text(dx + item_height + 2, dy, dw, line_height, Vocab.level)
+    change_color(normal_color, enable?(actor))
+    draw_text(dx+4, dy, dw-8, line_height, actor.level.to_s, 2)
+  end
+  
+  #--------------------------------------------------------------------------
+  # draw_guardian_hp
+  #--------------------------------------------------------------------------
+  def draw_guardian_hp(actor, dx, dy, dw)
+    colour = Color.new(0, 0, 0, translucent_alpha/2)
+    rect = Rect.new(dx+1, dy+1, dw-2, line_height-2)
+    contents.fill_rect(rect, colour)
+    change_color(system_color, enable?(actor))
+    draw_text(dx + 2, dy, dw, line_height, Vocab.hp)
+    change_color(normal_color, enable?(actor))
+    draw_text(dx+4, dy, dw-8, line_height, "#{actor.hp}/#{actor.mhp}", 2)
+  end
+  
+  #--------------------------------------------------------------------------
+  # draw_guardian_mp
+  #--------------------------------------------------------------------------
+  def draw_guardian_mp(actor, dx, dy, dw)
+    colour = Color.new(0, 0, 0, translucent_alpha/2)
+    rect = Rect.new(dx+1, dy+1, dw-2, line_height-2)
+    contents.fill_rect(rect, colour)
+    change_color(system_color, enable?(actor))
+    draw_text(dx + 2, dy, dw, line_height, Vocab.mp)
+    change_color(normal_color, enable?(actor))
+    draw_text(dx+4, dy, dw-8, line_height, "#{actor.mp}/#{actor.mmp}", 2)
+  end
+  
+  #--------------------------------------------------------------------------
+  # enable?
+  #--------------------------------------------------------------------------
+  def enable?(actor = nil)
+    return false if actor.nil?
+    return false if actor.summoner
+    return actor.alive?
+  end
+  
+  #--------------------------------------------------------------------------
+  # current_item_enabled?
+  #--------------------------------------------------------------------------
+  def current_item_enabled?
+    enable?($game_party.guardians[index])
+  end
+  
+  #--------------------------------------------------------------------------
+  # guardian
+  #--------------------------------------------------------------------------
+  def guardian
+    $game_party.guardians[index]
+  end
+  
+  #--------------------------------------------------------------------------
+  # show
+  #--------------------------------------------------------------------------
+  def show
+    @help_window.show
+    super
+    activate
+  end
+  
+  #--------------------------------------------------------------------------
+  # hide
+  #--------------------------------------------------------------------------
+  def hide
+    @help_window.hide
+    super
+    deactivate
+  end
+  
+  #--------------------------------------------------------------------------
+  # activate
+  #--------------------------------------------------------------------------
+  def activate
+    select(0)
+    super
+  end
+  
+end # Window_BattleSummon
+
+#==============================================================================
+# Å° Window_BattleLog
+#==============================================================================
+
+class Window_BattleLog < Window_Selectable
+  
+  #--------------------------------------------------------------------------
+  # new method: display_summon
+  #--------------------------------------------------------------------------
+  def display_summon(subject, guardian)
+    text = YSE::GUARDIAN_SUMMON::SUMMON_CONFIGURATION[:summon_text]
+    text = sprintf(text, subject.name, guardian.name)
+    add_text(text)
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: display_summon_fail
+  #--------------------------------------------------------------------------
+  def display_summon_fail(subject)
+    text = YSE::GUARDIAN_SUMMON::SUMMON_CONFIGURATION[:fail_text]
+    text = sprintf(text, subject.name)
+    add_text(text)
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: display_return
+  #--------------------------------------------------------------------------
+  def display_return(guardian)
+    text = YSE::GUARDIAN_SUMMON::SUMMON_CONFIGURATION[:return_text]
+    text = sprintf(text, guardian.name)
+    add_text(text)
+  end
+  
+end # Window_BattleLog
+
+#==============================================================================
+# Å° Scene_Battle
+#==============================================================================
+
+class Scene_Battle < Scene_Base
+  
+  #--------------------------------------------------------------------------
+  # alias method: create_all_windows
+  #--------------------------------------------------------------------------
+  alias yse_create_all_windows_gsummon create_all_windows
+  def create_all_windows
+    yse_create_all_windows_gsummon
+    create_summon_window
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: create_summon_window
+  #--------------------------------------------------------------------------
+  def create_summon_window
+    @summon_window = Window_BattleSummon.new(@help_window)
+    @summon_window.set_handler(:ok,     method(:on_summon_ok))
+    @summon_window.set_handler(:cancel, method(:on_summon_cancel))
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: on_skill_ok
+  #--------------------------------------------------------------------------
+  alias yse_on_skill_ok_gsummon on_skill_ok
+  def on_skill_ok
+    @skill = @skill_window.item
+    @skill.is_summon ? command_summon : yse_on_skill_ok_gsummon
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: command_use_skill
+  # Compatible with: Yanfly Engine Ace - Battle Command List
+  #--------------------------------------------------------------------------
+  if $imported["YEA-BattleCommandList"]
+  alias yse_command_use_skill_gsummon command_use_skill
+  def command_use_skill
+    @skill = $data_skills[@actor_command_window.current_ext]
+    @skill.is_summon ? command_summon : yse_command_use_skill_gsummon
+  end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: command_summon
+  #--------------------------------------------------------------------------
+  def command_summon
+    if YSE::GUARDIAN.summon_paired?
+      BattleManager.actor.input.set_skill(@skill.id)
+      BattleManager.actor.last_skill.object = @skill
+      BattleManager.actor.input.summon_id = BattleManager.actor.first_guardian
+      @skill_window.hide
+      next_command
+    else
+      BattleManager.actor.input.set_skill(@skill.id)
+      BattleManager.actor.last_skill.object = @skill
+      @skill_window.hide unless $imported["YEA-BattleEngine"]
+      @summon_window.show
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: on_summon_ok
+  #--------------------------------------------------------------------------
+  def on_summon_ok
+    @summon_window.hide
+    BattleManager.actor.input.summon_id = @summon_window.guardian
+    @skill_window.hide if $imported["YEA-BattleEngine"]
+    next_command
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: command_summon
+  #--------------------------------------------------------------------------
+  def on_summon_cancel
+    @summon_window.hide
+    if @actor_command_window.close? || !@actor_command_window.visible
+      @skill_window.show
+      @skill_window.activate
+    else
+      @actor_command_window.activate
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: command_summon
+  #--------------------------------------------------------------------------
+  alias yse_use_item_gsummon use_item
+  def use_item
+    if @subject.current_action.item.is_summon
+      use_summon
+    elsif @subject.current_action.item.is_greturn
+      use_greturn
+    else
+      yse_use_item_gsummon
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: use_summon
+  #--------------------------------------------------------------------------
+  def use_summon
+    summon = @subject.current_action.summon_id
+    if $game_party.battle_members.include?(summon)
+      @log_window.display_summon_fail(@subject)
+      return
+    end
+    if $game_party.battle_members.size >= $game_party.max_battle_members
+      if YSE::GUARDIAN.ds_summon?
+        @log_window.display_summon_fail(@subject)
+        return
+      end
+    end
+    @log_window.display_summon(@subject, summon)
+    #---
+    $game_party.summon_aeon(summon)
+    unless YSE::GUARDIAN.aeon_party?
+      @subject.aeon = summon
+    end
+    #---
+    $imported["YEA-BattleEngine"] ? @status_window.refresh : refresh_status
+    @summon_window.redraw_item(summon.guardian_index)
+    targets = $game_troop.alive_members
+    return battle_log_wait(4) if summon.actor.summon_ani <= 0
+    show_animation(targets, summon.actor.summon_ani)
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: use_greturn
+  #--------------------------------------------------------------------------
+  def use_greturn
+    @log_window.display_return(@subject)
+    #---
+    $game_party.return_aeon(@subject)
+    unless YSE::GUARDIAN.aeon_party?
+      @subject.greturn
+      @subject.summoner = nil
+    end
+    #---
+    $imported["YEA-BattleEngine"] ? @status_window.refresh : refresh_status
+    @summon_window.redraw_item(@subject.guardian_index)
+    targets = $game_troop.alive_members
+    return battle_log_wait(4) if @subject.actor.return_ani <= 0
+    show_animation(targets, @subject.actor.return_ani)
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: greturn_battle_end
+  #--------------------------------------------------------------------------
+  def greturn_battle_end
+    $game_party.clear_aeons
+    @status_window.refresh
+    @summon_window.refresh
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: battle_log_wait
+  #--------------------------------------------------------------------------
+  def battle_log_wait(abs)
+    abs.times do @log_window.wait end
+  end
+  
+end # Scene_Battle
+
+#==============================================================================
+# 
+# Å• End of File
+# 
+#==============================================================================

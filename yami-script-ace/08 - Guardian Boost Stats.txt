@@ -1,0 +1,320 @@
+#==============================================================================
+# 
+# Å• Yami Engine Ace - Guardian Series
+# -- Script: Guardian Boost Stats
+# -- Last Updated: 2012.06.13
+# -- Level: Easy
+# -- Requires: YSE - Guardian Pairing
+# 
+#==============================================================================
+
+$imported = {} if $imported.nil?
+$imported["YSE-GuardianBoostStats"] = true
+
+#==============================================================================
+# Å• Updates
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2012.06.13 - You can adjust which Stats will be injected.
+# 2012.03.15 - Started and Finished Script.
+# 
+#==============================================================================
+# Å• Introduction
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script provides a new feature for YSE - Guardian Pairing, which boost
+# stats for an actor by Guardian's attributes.
+#
+#==============================================================================
+# Å• Instructions
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# To install this script, open up your script editor and copy/paste this script
+# to an open slot below Å• Materials/ëfçﬁ but above Å• Main. Remember to save.
+#
+#==============================================================================
+# Å• Compatibility
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script is made strictly for RPG Maker VX Ace. It is highly unlikely that
+# it will run with RPG Maker VX without adjusting.
+# 
+#==============================================================================
+
+module YSE
+  module GUARDIAN_PAIRING
+    
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    # - Attributes Settings -
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    # This section adjusts the stats plus and traits plus of actor who paired
+    # with a guardian.
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    ATTRIBUTES = { # Start.
+      :stats      =>  true, # Stats injection
+      :traits     =>  true, # Traits injection
+      :skills     =>  true, # Skills injection
+    } # Done.
+    
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    # - Stats Injection Settings -
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    # This section adjust which stats will be injected.
+    # ID  - Stat
+    # 0     Max HP
+    # 1     Max MP
+    # 2     ATK
+    # 3     DEF
+    # 4     MAT
+    # 5     MDF
+    # 6     AGI
+    # 7     LUK
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    STATS_INJECTION = [0,1,2,3,4,5,6,7]
+
+  end
+end  
+
+#==============================================================================
+# Å• Editting anything past this point may potentially result in causing
+# computer damage, incontinence, explosion of user's head, coma, death, and/or
+# halitosis so edit at your own risk.
+#==============================================================================
+
+#==============================================================================
+# Å° Game_Actor
+#==============================================================================
+
+class Game_Actor < Game_Battler
+  
+  #--------------------------------------------------------------------------
+  # alias method: param_plus
+  #--------------------------------------------------------------------------
+  alias yse_param_plus_gbs param_plus
+  def param_plus(param_id)
+    return yse_param_plus_gbs(param_id) unless YSE::GUARDIAN_PAIRING::ATTRIBUTES[:stats]
+    return yse_param_plus_gbs(param_id) if guardian?
+    return yse_param_plus_gbs(param_id) unless YSE::GUARDIAN_PAIRING::STATS_INJECTION.include?(param_id)
+    guardians.compact.inject(yse_param_plus_gbs(param_id)) {|r, item| r += item.param(param_id) }
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: feature_objects
+  #--------------------------------------------------------------------------
+  alias yse_feature_objects_gbs feature_objects
+  def feature_objects
+    return yse_feature_objects_gbs unless YSE::GUARDIAN_PAIRING::ATTRIBUTES[:traits]
+    return yse_feature_objects_gbs if guardian?
+    result = yse_feature_objects_gbs
+    guardians.each { |g| result += g.feature_objects }
+    result
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: skills
+  #--------------------------------------------------------------------------
+  alias yse_skills_gbs skills
+  def skills
+    return yse_skills_gbs unless YSE::GUARDIAN_PAIRING::ATTRIBUTES[:skills]
+    return yse_skills_gbs if guardian?
+    result = yse_skills_gbs
+    guardians.each { |g| result = result | g.skills }
+    result
+  end
+  
+end # Game_Actor
+
+#==============================================================================
+# Å° Window_MenuGuardianPair
+#==============================================================================
+
+class Window_MenuGuardianPair < Window_MenuGuardian
+  
+  #--------------------------------------------------------------------------
+  # window_width
+  #--------------------------------------------------------------------------
+  def window_width
+    Graphics.width - 232
+  end
+  
+  #--------------------------------------------------------------------------
+  # window_height
+  #--------------------------------------------------------------------------
+  def window_height
+    Graphics.height - 128 - 64
+  end
+  
+  #--------------------------------------------------------------------------
+  # col_max
+  #--------------------------------------------------------------------------
+  def col_max
+    1
+  end
+  
+  #--------------------------------------------------------------------------
+  # actor_status=
+  #--------------------------------------------------------------------------
+  def actor_status=(actor_status)
+    @actor_status = actor_status
+  end
+  
+  #--------------------------------------------------------------------------
+  # update
+  #--------------------------------------------------------------------------
+  def update
+    super
+    update_actor_status
+  end
+  
+  #--------------------------------------------------------------------------
+  # update_actor_status
+  #--------------------------------------------------------------------------
+  def update_actor_status
+    return unless @actor_status
+    return unless $game_party.guardians[index]
+    return @actor_status.clear_temp if index < 0
+    item = $game_party.guardians[index]
+    @actor_status.set_temp_actor(item)
+  end
+  
+end # Window_MenuGuardianPair
+
+#==============================================================================
+# Å° Window_GuardianPairStatus
+#==============================================================================
+
+class Window_GuardianPairStatus < Window_Base
+  
+  #--------------------------------------------------------------------------
+  # initialize
+  #--------------------------------------------------------------------------
+  def initialize(x, y)
+    super(x, y, window_width, Graphics.height - y)
+    @actor = $game_party.target_actor
+    temp_actor = Marshal.load(Marshal.dump(@actor))
+    @temp_actor = temp_actor
+    refresh
+  end
+  
+  #--------------------------------------------------------------------------
+  # window_width
+  #--------------------------------------------------------------------------
+  def window_width
+    232
+  end
+
+  #--------------------------------------------------------------------------
+  # visible_line_number
+  #--------------------------------------------------------------------------
+  def visible_line_number
+    return 8
+  end
+  
+  #--------------------------------------------------------------------------
+  # actor
+  #--------------------------------------------------------------------------
+  def actor
+    @actor
+  end
+  
+  #--------------------------------------------------------------------------
+  # set_temp_actor
+  #--------------------------------------------------------------------------
+  def set_temp_actor(guardian)
+    return unless @temp_actor
+    return if @temp_actor.guardians.include?(guardian)
+    @temp_actor.force_pair(guardian)
+    refresh
+  end
+  
+  #--------------------------------------------------------------------------
+  # clear_temp
+  #--------------------------------------------------------------------------
+  def clear_temp
+    temp_actor = Marshal.load(Marshal.dump(@actor))
+    @temp_actor = temp_actor
+    refresh
+  end
+  
+  #--------------------------------------------------------------------------
+  # refresh
+  #--------------------------------------------------------------------------
+  def refresh
+    contents.clear
+    8.times { |i| draw_actor_param(i, 0, line_height * i, contents_width) }
+  end
+  
+  #--------------------------------------------------------------------------
+  # draw_actor_param
+  #--------------------------------------------------------------------------
+  def draw_actor_param(param_id, dx, dy, dw)
+    colour = Color.new(0, 0, 0, translucent_alpha/2)
+    rect = Rect.new(dx+1, dy+1, dw-2, line_height-2)
+    contents.fill_rect(rect, colour)
+    change_color(system_color)
+    draw_text(dx+4, dy, dw-8, line_height, Vocab::param(param_id))
+    change_color(normal_color)
+    draw_text(dx+4, dy, dw-8, line_height, changed_param(param_id), 2)
+  end
+  
+  #--------------------------------------------------------------------------
+  # changed_param
+  #--------------------------------------------------------------------------
+  def changed_param(param_id)
+    result = ""
+    result += @actor.param(param_id).to_s
+    return result if @temp_actor.nil?
+    return result if @temp_actor.guardians == @actor.guardians
+    result += "Å® " + @temp_actor.param(param_id).to_s
+    return result
+  end
+
+end # Window_GuardianPairStatus
+
+#==============================================================================
+# Å° Scene_GuardianPairing
+#==============================================================================
+
+class Scene_GuardianPairing < Scene_MenuBase
+  
+  #--------------------------------------------------------------------------
+  # alias method: start
+  #--------------------------------------------------------------------------
+  alias yse_start_gbs start
+  def start
+    yse_start_gbs
+    create_actor_status_window
+  end
+
+  #--------------------------------------------------------------------------
+  # new method: create_actor_status_window
+  #--------------------------------------------------------------------------
+  def create_actor_status_window
+    wx = 0
+    wy = @command_window.height + @command_window.y
+    @actor_status_window = Window_GuardianPairStatus.new(wx, wy)
+    @actor_status_window.viewport = @viewport
+    @guardian_window.actor_status = @actor_status_window
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: process_pair
+  #--------------------------------------------------------------------------
+  alias yse_process_pair_gbs process_pair
+  def process_pair
+    yse_process_pair_gbs
+    @actor_status_window.refresh
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: process_unpair
+  #--------------------------------------------------------------------------
+  alias yse_process_unpair_gbs process_unpair
+  def process_unpair
+    yse_process_unpair_gbs
+    @actor_status_window.refresh
+  end
+  
+end # Scene_GuardianPairing
+
+#==============================================================================
+# 
+# Å• End of File
+# 
+#==============================================================================

@@ -1,0 +1,496 @@
+#==============================================================================
+# 
+# Å• Yami Engine Ace - Pop Message
+# -- Last Updated: 2012.06.07
+# -- Level: Normal
+# -- Requires: n/a
+# 
+#==============================================================================
+
+$imported = {} if $imported.nil?
+$imported["YSE-PopMessage"] = true
+
+#==============================================================================
+# Å• Updates
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2012.06.07 - Fixed Compatible: YEA - Ace Message System.
+# 2012.05.11 - Fixed Message Position.
+#            - Remove Requirement: YSE - Fix Events Order.
+# 2012.05.07 - Fixed Face position.
+#            - Added Requirement: YSE - Fix Events Order.
+# 2012.04.06 - You can change Bubble Tag filename.
+# 2012.03.28 - Fixed Default Message Position and Sizes.
+# 2012.03.27 - Fixed Default Message.
+# 2012.03.27 - Added Bubble Tag.
+# 2012.03.25 - Fixed Escape Message.
+# 2012.03.24 - Fixed Battle Message.
+# 2012.03.24 - Rewrote script.
+# 
+#==============================================================================
+# Å• Instructions
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# To install this script, open up your script editor and copy/paste this script
+# to an open slot below Å• Materials/ëfçﬁ but above Å• Main. Remember to save.
+# 
+# -----------------------------------------------------------------------------
+# Message Window text Codes - These go inside of your message window.
+# -----------------------------------------------------------------------------
+#  Position:   Effect:
+#    \bm[x]    - Sets Message Window position to event x. *Note
+#    \cbm      - Cancel bubble message.
+#
+#              *Note: Set to 0 to sets position to Game Player.
+#
+#==============================================================================
+# Å• Compatibility
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script is made strictly for RPG Maker VX Ace. It is highly unlikely that
+# it will run with RPG Maker VX without adjusting.
+# 
+#==============================================================================
+
+module YSE
+  module POP_MESSAGE
+    
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    # - Visual Settings -
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    LIMIT = { # Start.
+      :limit_width    =>  0,  # Set to 0 to disable limit.
+      :limit_line     =>  6,  # Set to 0 to disable limit.
+    } # End.
+    
+    POSITION = { # Start.
+      :x_buffer       =>  0,
+      :y_buffer       =>  -36,
+      :face_x_buffer  =>  8,
+      :face_y_buffer  =>  24,
+      :tag_y_buffer   =>  -6,
+      :name_x_buffer  =>  112, # Require YEA - Message System.
+    } # End.
+    
+    EFFECT = { # Start.
+      :fade_face       =>  true,
+      :move_face       =>  true,
+      :use_bubble_tag  =>  true,
+      :bubble_tag_name => "BubbleTag",
+    } # End.
+    
+  end
+end
+
+#==============================================================================
+# Å• Editting anything past this point may potentially result in causing
+# computer damage, incontinence, explosion of user's head, coma, death, and/or
+# halitosis so edit at your own risk.
+#==============================================================================
+
+#==============================================================================
+# Å° Spriteset_Map
+#==============================================================================
+
+class Spriteset_Map
+  
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_accessor :character_sprites
+  
+end # Spriteset_Map
+
+#==============================================================================
+# Å° Window_Message_Face
+#==============================================================================
+
+class Window_Message_Face < Window_Base
+  
+  #--------------------------------------------------------------------------
+  # initialize
+  #--------------------------------------------------------------------------
+  def initialize
+    super(0, 0, 120, 120)
+    self.opacity = 0
+    @face_name = ""
+    @face_index = 0
+    @move_x = 0
+    close
+  end
+  
+  #--------------------------------------------------------------------------
+  # message_window=
+  #--------------------------------------------------------------------------
+  def message_window=(window)
+    @message_window = window
+  end
+  
+  #--------------------------------------------------------------------------
+  # set_face
+  #--------------------------------------------------------------------------
+  def set_face
+    contents.clear
+    return unless @message_window
+    if !$game_message.face_name.empty?
+      draw_face($game_message.face_name, $game_message.face_index, 0, 0)
+      set_position
+      show_face
+    else
+      hide_face
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # set_position
+  #--------------------------------------------------------------------------
+  def set_position
+    return unless @message_window
+    self.x = @message_window.x
+    self.y = @message_window.y - 96
+    self.x += YSE::POP_MESSAGE::POSITION[:face_x_buffer]
+    self.y += YSE::POP_MESSAGE::POSITION[:face_y_buffer]
+    self.y += (@message_window.real_lines - 1) * 24
+    self.z = @message_window.z + 1
+    if (@face_name != $game_message.face_name || @face_index != $game_message.face_index)
+      if YSE::POP_MESSAGE::EFFECT[:move_face]
+        @move_x = 30
+        self.x -= 30
+      end
+      @face_name = $game_message.face_name
+      @face_index = $game_message.face_index
+      self.contents_opacity = 0 if YSE::POP_MESSAGE::EFFECT[:fade_face]
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # show_face
+  #--------------------------------------------------------------------------
+  def show_face
+    open
+  end
+  
+  #--------------------------------------------------------------------------
+  # hide_face
+  #--------------------------------------------------------------------------
+  def hide_face
+    contents.clear
+    close
+  end
+  
+  #--------------------------------------------------------------------------
+  # update
+  #--------------------------------------------------------------------------
+  def update
+    super
+    self.contents_opacity += 15 if self.contents_opacity < 255
+    unless @move_x <= 0
+      self.x += 2
+      @move_x -= 2
+    end
+  end
+  
+end # Sprite_Message_Face
+
+#==============================================================================
+# Å° Window_Message
+#==============================================================================
+
+class Window_Message < Window_Base
+  
+  #--------------------------------------------------------------------------
+  # new method: face_window=
+  #--------------------------------------------------------------------------
+  def face_window=(window)
+    @face_window = window
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: bubble_tag=
+  #--------------------------------------------------------------------------
+  def bubble_tag=(sprite)
+    @bubble_tag = sprite
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: message_escape_characters_pop_message
+  #--------------------------------------------------------------------------
+  def message_escape_characters_pop_message(result)
+    result.gsub!(/\eBM\[(\d+)\]/i) { event_pop_message_setup($1.to_i, false) }
+    result.gsub!(/\eBMF\[(\d+)\]/i) { event_pop_message_setup($1.to_i, true) }
+    result.gsub!(/\eCBM/i) { event_pop_message_setup(nil, false) }
+    result
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: convert_escape_characters
+  #--------------------------------------------------------------------------
+  alias yse_convert_escape_characters_pm convert_escape_characters
+  def convert_escape_characters(text)
+    result = yse_convert_escape_characters_pm(text)
+    result = message_escape_characters_pop_message(result)
+    result
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: event_pop_message_setup
+  #--------------------------------------------------------------------------
+  def event_pop_message_setup(event_id, follower = false)
+    if follower && $game_player.followers[event_id].nil?
+      @event_pop_id = nil
+      @event_pop_follower = false
+      return ""
+    end
+    @event_pop_follower = follower
+    @event_pop_id = event_id
+    return ""
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: set_face_position
+  #--------------------------------------------------------------------------
+  def set_face_position
+    return unless SceneManager.scene_is?(Scene_Map)
+    return unless @event_pop_id
+    return unless @face_window
+    contents.clear
+    @face_window.set_face
+    return unless $imported["YEA-MessageSystem"]
+    return if @face_window.close?
+    #@name_window.x = self.x + YSE::POP_MESSAGE::POSITION[:face_x_buffer] + YSE::POP_MESSAGE::POSITION[:name_x_buffer] if (@name_position == 1 || @name_position == 2)
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: new_page
+  #--------------------------------------------------------------------------
+  alias window_message_new_page_pm_yse new_page
+  def new_page(text, pos)
+    window_message_new_page_pm_yse(text, pos)
+    set_face_position
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: close
+  #--------------------------------------------------------------------------
+  alias pop_message_close close
+  def close
+    pop_message_close
+    return unless SceneManager.scene_is?(Scene_Map) 
+    return unless @event_pop_id
+    @event_pop_id = nil
+    @event_pop_follower = false
+    @face_window.hide_face
+    return unless YSE::POP_MESSAGE::EFFECT[:use_bubble_tag]
+    @bubble_tag.visible = false if @bubble_tag
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: open_and_wait
+  #--------------------------------------------------------------------------
+  alias pop_message_open_and_wait open_and_wait
+  def open_and_wait
+    pop_message_open_and_wait
+    return unless YSE::POP_MESSAGE::EFFECT[:use_bubble_tag]
+    @bubble_tag.visible = true if @event_pop_id && @bubble_tag
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: process_all_text
+  #--------------------------------------------------------------------------
+  alias pop_message_process_all_text process_all_text
+  def process_all_text
+    @event_pop_id = nil
+    convert_escape_characters($game_message.all_text)
+    update_placement
+    adjust_pop_message($game_message.all_text)
+    pop_message_process_all_text
+  end
+
+  #--------------------------------------------------------------------------
+  # alias method: update_placement
+  #--------------------------------------------------------------------------
+  alias event_pop_message_update_placement update_placement
+  def update_placement
+    if SceneManager.scene_is?(Scene_Map) 
+      if @event_pop_id.nil?
+        fix_default_message
+        event_pop_message_update_placement
+      elsif @event_pop_id == 0
+        character = $game_player
+        self.y = character.screen_y - self.height + YSE::POP_MESSAGE::POSITION[:y_buffer]
+        self.x = character.screen_x - self.width / 2 + YSE::POP_MESSAGE::POSITION[:x_buffer]
+        fix_position_bubble(character)
+        set_bubble_tag(character)
+      elsif @event_pop_id > 0
+        hash = @event_pop_follower ? $game_player.followers : $game_map.events
+        character = hash[@event_pop_id]
+        self.y = character.screen_y - self.height + YSE::POP_MESSAGE::POSITION[:y_buffer]
+        self.x = character.screen_x - self.width / 2 + YSE::POP_MESSAGE::POSITION[:x_buffer]
+        fix_position_bubble(character)
+        set_bubble_tag(character)
+      end
+    else
+      event_pop_message_update_placement
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: fix_default_message
+  #--------------------------------------------------------------------------
+  def fix_default_message
+    self.width = window_width
+    self.height = window_height
+    self.x = 0
+    @face_window.hide_face if @face_window
+    create_contents
+    return unless YSE::POP_MESSAGE::EFFECT[:use_bubble_tag]
+    @bubble_tag.visible = false if @bubble_tag
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: fix_position_bubble
+  #--------------------------------------------------------------------------
+  def fix_position_bubble(character)
+    end_x = self.x + self.width
+    end_y = self.y + self.height
+    self.x = 0 if self.x < 0
+    self.y = character.screen_y if self.y < 0
+    self.x = Graphics.width - self.width if end_x > Graphics.width
+    self.y = Graphics.height - self.height if end_y > Graphics.height
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: set_bubble_tag
+  #--------------------------------------------------------------------------
+  def set_bubble_tag(character)
+    return unless YSE::POP_MESSAGE::EFFECT[:use_bubble_tag]
+    return unless @bubble_tag
+    up = self.y == character.screen_y
+    self.y += up ? @bubble_tag.height / 2 : -@bubble_tag.height / 2
+    @bubble_tag.x = character.screen_x - @bubble_tag.width / 2
+    if up
+      @bubble_tag.src_rect.set(0, @bubble_tag.height, @bubble_tag.width, @bubble_tag.height)
+      @bubble_tag.y = self.y - @bubble_tag.height - YSE::POP_MESSAGE::POSITION[:tag_y_buffer]
+    else
+      @bubble_tag.src_rect.set(0, 0, @bubble_tag.width, @bubble_tag.height)
+      @bubble_tag.y = self.y + self.height + YSE::POP_MESSAGE::POSITION[:tag_y_buffer]
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: cal_number_line
+  #--------------------------------------------------------------------------
+  def cal_number_line(text)
+    result = 0
+    text.each_line { result += 1 }
+    return result
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: cal_width_line
+  #--------------------------------------------------------------------------
+  def cal_width_line(text)
+    result = 0
+    text.each_line { |line|
+      result = text_size(line).width if result < text_size(line).width
+    }
+    return result
+  end
+
+  #--------------------------------------------------------------------------
+  # alias method: adjust_message_window_size
+  #--------------------------------------------------------------------------
+  if $imported["YEA-MessageSystem"]
+  alias yse_pop_message_adjust_message_window_size adjust_message_window_size
+  def adjust_message_window_size
+    start_name_window if @event_pop_id
+    return if @event_pop_id
+    yse_pop_message_adjust_message_window_size
+  end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: adjust_pop_message
+  #--------------------------------------------------------------------------
+  def adjust_pop_message(text = " ")
+    return unless SceneManager.scene_is?(Scene_Map) 
+    unless @event_pop_id
+      if $imported["YEA-MessageSystem"]
+        #adjust_message_window_size 
+      end
+      return
+    end
+    n_line = cal_number_line(text)
+    n_line = YSE::POP_MESSAGE::LIMIT[:limit_line] if YSE::POP_MESSAGE::LIMIT[:limit_line] > 0 && cal_number_line(text) > YSE::POP_MESSAGE::LIMIT[:limit_line]
+    @real_lines = n_line
+    self.height = fitting_height(n_line)
+    self.width = cal_width_line(text) + 24
+    self.width += new_line_x
+    if self.width > YSE::POP_MESSAGE::LIMIT[:limit_width] && YSE::POP_MESSAGE::LIMIT[:limit_width] > 0
+      self.width = YSE::POP_MESSAGE::LIMIT[:limit_width]
+    end
+    create_contents
+    update_placement
+  end
+  
+  #--------------------------------------------------------------------------
+  # overwrite method: new_line_x
+  #--------------------------------------------------------------------------
+  def new_line_x
+    if $game_message.face_name.empty?
+      return 0
+    else
+      result = YSE::POP_MESSAGE::POSITION[:face_x_buffer]
+      p_x = $imported["YEA-MessageSystem"] ? YEA::MESSAGE::FACE_INDENT_X : 112
+      result += p_x
+      return result
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: real_lines
+  #--------------------------------------------------------------------------
+  def real_lines
+    @real_lines
+  end
+  
+end # Window_Message
+
+#==============================================================================
+# Å° Scene_Map
+#==============================================================================
+
+class Scene_Map < Scene_Base
+  
+  #--------------------------------------------------------------------------
+  # alias method: create_message_window
+  #--------------------------------------------------------------------------
+  alias yse_pm_create_message_window create_message_window
+  def create_message_window
+    yse_pm_create_message_window
+    @face_window = Window_Message_Face.new
+    @face_window.message_window = @message_window
+    if YSE::POP_MESSAGE::EFFECT[:use_bubble_tag]
+      @bubble_tag_sprite = Sprite.new
+      @bubble_tag_sprite.visible = false
+      @bubble_tag_sprite.bitmap = Cache.system(YSE::POP_MESSAGE::EFFECT[:bubble_tag_name])
+      @bubble_tag_sprite.src_rect.set(0, 0, @bubble_tag_sprite.width, @bubble_tag_sprite.height / 2)
+      @message_window.bubble_tag = @bubble_tag_sprite
+    end
+    @message_window.face_window = @face_window
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: dispose_spriteset
+  #--------------------------------------------------------------------------
+  alias pop_message_dispose_spriteset dispose_spriteset
+  def dispose_spriteset
+    pop_message_dispose_spriteset
+    return unless @bubble_tag_sprite
+    @bubble_tag_sprite.dispose
+  end
+  
+end # Scene_Map
+
+#==============================================================================
+# 
+# Å• End of File
+# 
+#==============================================================================

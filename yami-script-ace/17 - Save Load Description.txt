@@ -1,0 +1,94 @@
+#==============================================================================
+# 
+# Бе Yami Engine Ace - Save/Load Description
+# -- Last Updated: 2012.06.23
+# -- Level: Easy
+# -- Requires: none
+# 
+#==============================================================================
+
+$imported = {} if $imported.nil?
+$imported["YSE-SaveLoadDescription"] = true
+
+#==============================================================================
+# Бе Updates
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2012.06.23 - Started Script and Finished.
+# 
+#==============================================================================
+# Бе Introduction
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script will show a custom text on each Save/Load File window.
+# 
+#==============================================================================
+# Бе Instructions
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# To install this script, open up your script editor and copy/paste this script
+# to an open slot below Бе Materials/СfН▐ but above Бе Main. Remember to save.
+#
+# You have to set Variable Index for Text. To set text for Variable, You choose
+# Control Variables from Event and write "Description Here" in Script. Do not
+# remove "", and remember to change Description Here to something else.
+# 
+#==============================================================================
+# Бе Compatibility
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script is made strictly for RPG Maker VX Ace. It is highly unlikely that
+# it will run with RPG Maker VX without adjusting.
+# 
+#==============================================================================
+
+module YSE
+  module CUSTOM_STRING_FILE
+    
+    # Set Text Variable.
+    VARIABLE_INDEX = 17
+    
+  end # CUSTOM_STRING_FILE
+end # YSE
+
+#==============================================================================
+# Бе Editting anything past this point may potentially result in causing
+# computer damage, incontinence, explosion of user's head, coma, death, and/or
+# halitosis so edit at your own risk.
+#==============================================================================
+
+#==============================================================================
+# Бб Window_SaveFile
+#==============================================================================
+
+class Window_SaveFile < Window_Base
+  
+  #--------------------------------------------------------------------------
+  # alias method: refresh
+  #--------------------------------------------------------------------------
+  alias yse_cstring_refresh refresh
+  def refresh
+    yse_cstring_refresh
+    draw_text(128, 0, Graphics.width - 24, line_height, custom_string)
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: custom_string
+  #--------------------------------------------------------------------------
+  def custom_string
+    begin
+      File.open(DataManager.make_filename(@file_index), "rb") do |file|
+        Marshal.load(file)
+        contents = Marshal.load(file)
+        game_variables = contents[:variables]
+        index = YSE::CUSTOM_STRING_FILE::VARIABLE_INDEX
+        return game_variables[index].to_s
+      end
+    rescue
+      return ""
+    end
+  end
+  
+end # Window_SaveFile
+
+#==============================================================================
+# 
+# Бе End of File
+# 
+#==============================================================================

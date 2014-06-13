@@ -1,0 +1,530 @@
+#==============================================================================
+# 
+# Å• Yami Engine Ace - Guardian Series
+# -- Script: Esper Learning
+# -- Last Updated: 2012.05.12
+# -- Level: Easy
+# -- Requires: YSE - Guardian Pairing
+# 
+#==============================================================================
+
+$imported = {} if $imported.nil?
+$imported["YSE-GuardianEsperLearning"] = true
+
+#==============================================================================
+# Å• Updates
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2012.05.12 - Fixed Skill Points Showing.
+# 2012.05.06 - Finished Script.
+# 2012.05.05 - Started Script.
+# 
+#==============================================================================
+# Å• Introduction
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script provides a way to learn skills through pairing Guardian with an
+# actor. The way to learn is alike Final Fantasy 6 Espers, You will gain points
+# for each skill after battle and learn that skill when point reach requirement.
+#
+# -----------------------------------------------------------------------------
+# Actor Notetags - These notetags go in the actor notebox in the database.
+# ----------------------------------------------------------------------------- 
+# <teach skill: x>
+# Guardian can teach Actor learn skill x. Use multi-tag for a list of skills.
+#
+# -----------------------------------------------------------------------------
+# Enemy Notetags - These notetags go in the enemy notebox in the database.
+# ----------------------------------------------------------------------------- 
+# <teach point: x>
+# Change amount of points for killing this enemy.
+#
+# -----------------------------------------------------------------------------
+# Skill Notetags - These notetags go in the skill notebox in the database.
+# ----------------------------------------------------------------------------- 
+# <teach requirement: x>
+# Change amount of requirement points for learning this skill.
+#
+#==============================================================================
+# Å• Instructions
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# To install this script, open up your script editor and copy/paste this script
+# to an open slot below Å• Materials/ëfçﬁ but above Å• Main. Remember to save.
+#
+#==============================================================================
+# Å• Compatibility
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script is made strictly for RPG Maker VX Ace. It is highly unlikely that
+# it will run with RPG Maker VX without adjusting.
+# 
+#==============================================================================
+
+module YSE
+  module GUARDIAN_ESPER
+    
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    # - Mechanics Settings -
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    # All settings for Esper Learning are listed here.
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    DEFAULT_REQUIREMENT = 100   # Default requirement points to learn a skill.
+    DEFAULT_POINT_GAIN  = 1     # Default point gains for each enemy slained.
+    
+    VICTORY_MSG_GAIN    = "Your party gain %d GSP."
+    LEARN_MSG           = "%s learned skills:"
+
+  end
+end  
+
+#==============================================================================
+# Å• Editting anything past this point may potentially result in causing
+# computer damage, incontinence, explosion of user's head, coma, death, and/or
+# halitosis so edit at your own risk.
+#==============================================================================
+
+#==============================================================================
+# Å° Regular Expression
+#==============================================================================
+
+module YSE
+  module REGEXP
+  module ACTOR
+    
+    TEACH_SKILL = /<(?:TEACH_SKILL|teach skill):[ ](\d+)?>/i
+    
+  end # ACTOR
+  module SKILL
+    
+    TEACH_REQUIREMENT = /<(?:TEACH_REQUIREMENT|teach requirement):[ ](\d+)?>/i
+    
+  end # SKILL
+  module ENEMY
+    
+    TEACH_POINT = /<(?:TEACH_POINT|teach point):[ ](\d+)?>/i
+    
+  end # ENEMY
+  end # REGEXP
+end # YSE
+
+#==============================================================================
+# Å° Vocab
+#==============================================================================
+
+module Vocab
+  GSPGaining = YSE::GUARDIAN_ESPER::VICTORY_MSG_GAIN
+  GSPLearn   = YSE::GUARDIAN_ESPER::LEARN_MSG
+end
+
+#==============================================================================
+# Å° BattleManager
+#==============================================================================
+
+module BattleManager
+  
+  #--------------------------------------------------------------------------
+  # alias method: display_exp
+  #--------------------------------------------------------------------------
+  class<< self; alias yse_gff6l_display_exp display_exp; end
+  def self.display_exp
+    yse_gff6l_display_exp
+    if $game_troop.gsp_total > 0
+      text = sprintf(Vocab::GSPGaining, $game_troop.gsp_total)
+      $game_message.add('\.' + text)
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: gain_exp
+  #--------------------------------------------------------------------------
+  class<< self; alias yse_gff6l_gain_exp gain_exp; end
+  def self.gain_exp
+    yse_gff6l_gain_exp
+    $game_party.all_members.each do |actor|
+      actor.add_gsp($game_troop.gsp_total)
+    end
+    wait_for_message
+  end
+  
+end # BattleManager
+
+#==============================================================================
+# Å° RPG::Actor
+#==============================================================================
+
+class RPG::Actor < RPG::BaseItem
+  
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_accessor :teach_skills
+
+  #--------------------------------------------------------------------------
+  # alias method: notetags_reader
+  #--------------------------------------------------------------------------
+  alias yse_gff6l_notetags_reader notetags_reader
+  def notetags_reader
+    yse_gff6l_notetags_reader
+    #---
+    @teach_skills = []
+    @notelines.each { |line|
+      case line
+      #---
+      when YSE::REGEXP::ACTOR::TEACH_SKILL
+        @teach_skills.push($1.to_i)
+      end
+    }
+    #---
+  end
+  
+end # RPG::Actor
+
+#==============================================================================
+# Å° RPG::Skill
+#==============================================================================
+
+class RPG::Skill < RPG::UsableItem
+  
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_accessor :teach_requirement
+  
+  #--------------------------------------------------------------------------
+  # alias method: notetags_reader
+  #--------------------------------------------------------------------------
+  alias yse_gff6l_notetags_reader notetags_reader
+  def notetags_reader
+    yse_gff6l_notetags_reader
+    #---
+    @notelines.each { |line|
+      case line
+      #---
+      when YSE::REGEXP::SKILL::TEACH_REQUIREMENT
+        @teach_requirement = $1.to_i
+      end
+    }
+    #---
+    @teach_requirement = YSE::GUARDIAN_ESPER::DEFAULT_REQUIREMENT unless @teach_requirement
+  end
+  
+end # RPG::Skill
+
+#==============================================================================
+# Å° RPG::Enemy
+#==============================================================================
+
+class RPG::Enemy < RPG::BaseItem
+  
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_accessor :teach_point
+  
+  #--------------------------------------------------------------------------
+  # alias method: notetags_reader
+  #--------------------------------------------------------------------------
+  alias yse_gff6l_notetags_reader notetags_reader
+  def notetags_reader
+    yse_gff6l_notetags_reader
+    #---
+    @notelines.each { |line|
+      case line
+      #---
+      when YSE::REGEXP::ENEMY::TEACH_POINT
+        @teach_point = $1.to_i
+      end
+    }
+    #---
+    @teach_point = YSE::GUARDIAN_ESPER::DEFAULT_POINT_GAIN unless @teach_point
+  end
+  
+end # RPG::Enemy
+
+#==============================================================================
+# Å° Game_Actor
+#==============================================================================
+
+class Game_Actor < Game_Battler
+  
+  #--------------------------------------------------------------------------
+  # alias method: setup
+  #--------------------------------------------------------------------------
+  alias yse_gff6l_setup setup
+  def setup(actor_id)
+    yse_gff6l_setup(actor_id)
+    init_learn_esper
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: init_learn_esper
+  #--------------------------------------------------------------------------
+  def init_learn_esper
+    return if guardian?
+    @learn_esper = {}
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: teach_skills
+  #--------------------------------------------------------------------------
+  def teach_skills
+    return actor.teach_skills
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: esper_skills
+  #--------------------------------------------------------------------------
+  def esper_skills
+    return first_guardian.teach_skills
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: req_gsp
+  #--------------------------------------------------------------------------
+  def req_gsp(skill_id)
+    $data_skills[skill_id].teach_requirement
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: cur_gsp
+  #--------------------------------------------------------------------------
+  def cur_gsp(skill_id)
+    if skill_learn?($data_skills[skill_id])
+      $data_skills[skill_id].teach_requirement
+    else
+      @learn_esper.has_key?(skill_id) ? @learn_esper[skill_id] : 0
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: fin_gsp
+  #--------------------------------------------------------------------------
+  def fin_gsp(skill_id)
+    return req_gsp(skill_id) == cur_gsp(skill_id)
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: add_gsp
+  #--------------------------------------------------------------------------
+  def add_gsp(sp)
+    return if guardian?
+    return unless is_pair?
+    learned = []
+    esper_skills.each { |id|
+      @learn_esper.has_key?(id) ? @learn_esper[id] += sp : @learn_esper[id] = sp
+      if @learn_esper[id] >= $data_skills[id].teach_requirement
+        learned.push(id) unless skill_learn?($data_skills[id])
+        learn_skill(id)
+        @learn_esper[id] = $data_skills[id].teach_requirement
+      end
+    }
+    if learned.size > 0
+      learned.collect! { |id| $data_skills[id] }
+      display_gsp_learned(learned)
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: display_gsp_learned
+  #--------------------------------------------------------------------------
+  def display_gsp_learned(new_skills)
+    $game_message.new_page
+    $game_message.add(sprintf(Vocab::GSPLearn, @name))
+    new_skills.each do |skill|
+      $game_message.add(sprintf(Vocab::ObtainSkill, skill.name))
+    end
+  end
+  
+end # Game_Actor
+
+#==============================================================================
+# Å° Game_Troop
+#==============================================================================
+
+class Game_Troop < Game_Unit
+  
+  #--------------------------------------------------------------------------
+  # new method: gsp_total
+  #--------------------------------------------------------------------------
+  def gsp_total
+    dead_members.inject(0) {|r, enemy| r += enemy.gsp }
+  end
+  
+end # Game_Troop
+
+#==============================================================================
+# Å° Game_Enemy
+#==============================================================================
+
+class Game_Enemy < Game_Battler
+  
+  #--------------------------------------------------------------------------
+  # new method: gsp
+  #--------------------------------------------------------------------------
+  def gsp
+    enemy.teach_point
+  end
+  
+end # Game_Enemy
+
+#==============================================================================
+# Å° Window_LearnGuardian
+#==============================================================================
+
+class Window_LearnGuardian < Window_Selectable
+  
+  #--------------------------------------------------------------------------
+  # initialize
+  #--------------------------------------------------------------------------
+  def initialize(x,y)
+    super(x, y, window_width, Graphics.height - y)
+    self.visible = false
+    @actor = $game_party.target_actor
+    refresh
+  end
+  
+  #--------------------------------------------------------------------------
+  # window_width
+  #--------------------------------------------------------------------------
+  def window_width
+    Graphics.width
+  end
+  
+  #--------------------------------------------------------------------------
+  # item_max
+  #--------------------------------------------------------------------------
+  def item_max
+    guardian.nil? ? 1 : guardian.teach_skills.size
+  end
+  
+  #--------------------------------------------------------------------------
+  # col_max
+  #--------------------------------------------------------------------------
+  def col_max
+    2
+  end
+  
+  #--------------------------------------------------------------------------
+  # actor
+  #--------------------------------------------------------------------------
+  def actor
+    @actor
+  end
+  
+  #--------------------------------------------------------------------------
+  # guardian
+  #--------------------------------------------------------------------------
+  def guardian
+    actor.nil? ? nil : actor.first_guardian
+  end
+  
+  #--------------------------------------------------------------------------
+  # teach_skills
+  #--------------------------------------------------------------------------
+  def teach_skills
+    guardian.teach_skills
+  end
+  
+  #--------------------------------------------------------------------------
+  # draw_item
+  #--------------------------------------------------------------------------
+  def draw_item(index)
+    return unless guardian
+    skill_id = teach_skills[index]
+    skill = $data_skills[skill_id]
+    rect = item_rect(index)
+    rect.width -= 4
+    if skill
+      learned = actor.cur_gsp(skill_id) == actor.req_gsp(skill_id)
+      draw_item_name(skill, rect.x, rect.y, learned)
+      draw_skill_gsp(rect, skill_id, learned)
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # draw_skill_gsp
+  #--------------------------------------------------------------------------
+  def draw_skill_gsp(rect, skill_id, learned)
+    change_color(normal_color, learned)
+    draw_text(rect.x, rect.y, rect.width - 52, line_height, actor.cur_gsp(skill_id), 2)
+    draw_text(rect.x, rect.y, rect.width - 42, line_height, "/", 2)
+    draw_text(rect.x, rect.y, rect.width, line_height, actor.req_gsp(skill_id), 2)
+  end
+  
+  #--------------------------------------------------------------------------
+  # item
+  #--------------------------------------------------------------------------
+  def item
+    if guardian.nil?
+      return nil
+    else
+      skill_id = teach_skills[index]
+      return nil unless skill_id
+      skill = $data_skills[skill_id]
+      return skill
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # update_help
+  #--------------------------------------------------------------------------
+  def update_help
+    return unless self.active
+    @help_window.set_item(item)
+  end
+  
+end # Window_LearnGuardian
+
+#==============================================================================
+# Å° Scene_GuardianPairing
+#==============================================================================
+
+class Scene_GuardianPairing < Scene_MenuBase
+  
+  #--------------------------------------------------------------------------
+  # alias method: start
+  #--------------------------------------------------------------------------
+  alias yse_gff6l_start start
+  def start
+    yse_gff6l_start
+    create_esper_window
+  end  
+  
+  #--------------------------------------------------------------------------
+  # new method: create_esper_window
+  #--------------------------------------------------------------------------
+  def create_esper_window
+    wy = @command_window.height + @command_window.y
+    @esper_window = Window_LearnGuardian.new(0, wy)
+    @esper_window.viewport = @viewport
+    @esper_window.help_window = @help_window
+    @esper_window.update_help
+    @esper_window.set_handler(:cancel,   method(:cancel_esper))
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: command_esperskill
+  #--------------------------------------------------------------------------
+  def command_esperskill
+    @esper_window.index = 0
+    @esper_window.refresh
+    @esper_window.show.activate
+    @guardian_window.hide
+    @actor_status_window.hide if $imported["YSE-GuardianBoostStats"]
+    @command_window.deactivate
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: command_esperskill
+  #--------------------------------------------------------------------------
+  def cancel_esper
+    @esper_window.hide.deactivate
+    @guardian_window.show
+    @actor_status_window.show if $imported["YSE-GuardianBoostStats"]
+    @command_window.activate
+  end
+    
+end # Scene_GuardianPairing
+
+#==============================================================================
+# 
+# Å• End of File
+# 
+#==============================================================================
