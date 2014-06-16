@@ -1,0 +1,1367 @@
+#==============================================================================
+# 
+# Å• YEA's Unofficial Add-on - Battle Engine Mechanic: Slot Battle
+# -- Last Updated: 2011.12.31
+# -- Level: Easy, Normal
+# -- Requires: YEA - Ace Battle Engine v1.09+.
+# 
+#==============================================================================
+
+$imported = {} if $imported.nil?
+$imported["YSA-SlotBattle"] = true
+
+#==============================================================================
+# Å• Updates
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2011.12.31 - Fix alias methods.
+# 2011.12.23 - Fix various bugs.
+# 2011.12.22 - Finished Script.
+# 2011.12.19 - Started Script.
+#
+#==============================================================================
+# Å• Instructions
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# To install this script, open up your script editor and copy/paste this script
+# to an open slot below Å• Materials/ëfçﬁ but above Å• Main. Remember to save.
+# 
+#==============================================================================
+# Å• Compatibility
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script is made strictly for RPG Maker VX Ace. It is highly unlikely that
+# it will run with RPG Maker VX without adjusting.
+# 
+# This script requires Yanfly Engine Ace - Ace Battle Engine v1.09+ and the
+# script must be placed under Ace Battle Engine in the script listing.
+# 
+#==============================================================================
+
+module YEA
+  module SLOT_BATTLE
+    
+    # Configuration
+    MAX_SLOT = 5 # Max slots per preset
+    MAX_PRESET = 3 # Max presets
+    
+    EDIT_SLOTS = "Edit Slots"
+    
+    BATTLE_SLOTS_TITLE = "'s Battle Slots"
+    BATTLE_SLOTS_TITLE_SIZE   = 20
+    IDLE_TEXT = "Idle"
+    IDLE_ICON = 121
+    MAKE_DEFAULT_TEXT = "Active Set"
+    
+    # If actor cannot use skill/item, they will switch into another action
+    # 0 - Idle ~ Do nothing
+    # 1 - Attack
+    # 2 - Guard
+    ACTION_IF_FAIL = 0
+    
+  end # SLOT_BATTLE
+end # YEA
+
+#==============================================================================
+# Å• Editting anything past this point may potentially result in causing
+# computer damage, incontinence, explosion of user's head, coma, death, and/or
+# halitosis so edit at your own risk.
+#==============================================================================
+
+#==============================================================================
+# Å° SceneManager
+#==============================================================================
+
+module SceneManager
+  
+  #--------------------------------------------------------------------------
+  # new method: self.force_recall
+  #--------------------------------------------------------------------------
+  def self.force_recall(scene_class)
+    @scene = scene_class
+  end
+  
+end # SceneManager
+
+#==============================================================================
+# Å° Game_Actor
+#==============================================================================
+
+class Game_Actor < Game_Battler
+  
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_accessor :preset_slots
+  attr_accessor :slot_acted
+  attr_accessor :current_slots
+  attr_accessor :default_preset_id
+  
+  #--------------------------------------------------------------------------
+  # alias method: setup
+  #--------------------------------------------------------------------------
+  alias skill_slot_setup setup
+  def setup(actor_id)
+    skill_slot_setup(actor_id)
+    @slot_acted = false
+    @default_preset_id = 0
+    @actions = []
+    @preset_slots = Array.new(YEA::SLOT_BATTLE::MAX_PRESET) { 
+      Array.new(YEA::SLOT_BATTLE::MAX_SLOT) { Game_Action.new(self) } 
+    }
+    for preset in @preset_slots
+      for action in preset
+        action.set_attack
+      end
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: command_slot_preset
+  #--------------------------------------------------------------------------
+  def command_slot_preset(preset_id)
+    @actions = Array.new(YEA::SLOT_BATTLE::MAX_SLOT) { 
+      |i| @preset_slots[preset_id][i].dup 
+    }
+    @current_slots.clear if @current_slots.is_a?(Array)
+    @current_slots = @preset_slots[preset_id].dup
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: current_action
+  #--------------------------------------------------------------------------
+  alias slot_current_action current_action
+  def current_action
+    @slot_acted ? nil : (slot_current_action ? (slot_current_action.item ? slot_current_action : nil) : nil)
+  end
+  
+  #--------------------------------------------------------------------------
+  # overwrite method: make_actions
+  #--------------------------------------------------------------------------
+  def make_actions
+    return
+  end
+  
+end # Game_Actor
+
+#==============================================================================
+# Å° BattleManager
+#==============================================================================
+
+module BattleManager
+
+  #--------------------------------------------------------------------------
+  # alias method: next_command
+  #--------------------------------------------------------------------------
+  class <<self; alias slot_battle_next_command next_command; end
+  def self.next_command
+    return false if in_turn?
+    return slot_battle_next_command
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: actor
+  #--------------------------------------------------------------------------
+  class <<self; alias slot_battle_actor actor; end
+  def self.actor
+    if in_turn?
+      SceneManager.scene.subject if SceneManager.scene.subject.actor?
+    else
+      slot_battle_actor
+    end
+  end
+
+end # BattleManager
+
+#==============================================================================
+# Å° Window_BSCurrentSlots
+#==============================================================================
+
+class Window_BSCurrentSlots < Window_Selectable
+  
+  #--------------------------------------------------------------------------
+  # initialize
+  #--------------------------------------------------------------------------
+  def initialize(x, y, width, height, battler)
+    super(x, y, width, height)
+    @battler = battler
+    @preset_id = 0
+    refresh
+  end
+  
+  #--------------------------------------------------------------------------
+  # preset_id=
+  #--------------------------------------------------------------------------
+  def preset_id=(preset_id)
+    return if @preset_id == preset_id
+    return if !@battler.preset_slots[@preset_id]
+    @preset_id = preset_id
+    refresh
+    self.oy = 0
+  end
+  
+  #--------------------------------------------------------------------------
+  # item_max
+  #--------------------------------------------------------------------------
+  def item_max
+    YEA::SLOT_BATTLE::MAX_SLOT
+  end
+  
+  #--------------------------------------------------------------------------
+  # item
+  #--------------------------------------------------------------------------
+  def item
+    @battler.preset_slots[@preset_id] && index >= 0 ? @battler.preset_slots[@preset_id][index] : nil
+  end
+  
+  #--------------------------------------------------------------------------
+  # draw_item
+  #--------------------------------------------------------------------------
+  def draw_item(index)
+    action = @battler.preset_slots[@preset_id][index]
+    rect = item_rect(index)
+    rect.width -= 4
+    cur_name = action.item ? action.item.name : YEA::SLOT_BATTLE::IDLE_TEXT
+    cur_icon = action.item ? action.item.icon_index : YEA::SLOT_BATTLE::IDLE_ICON
+    text = sprintf("\eC[17]Turn %d\eC[0]: ", index + 1)
+    text += sprintf("\eI[%d]", cur_icon)
+    text += cur_name
+    draw_text_ex(rect.x, rect.y, text)
+  end
+  
+end # Window_BSCurrentSlots
+
+#==============================================================================
+# Å° Window_ActsList
+#==============================================================================
+
+class Window_ActsList < Window_Selectable
+  
+  #--------------------------------------------------------------------------
+  # initialize
+  #--------------------------------------------------------------------------
+  def initialize(x, y, width, height)
+    super(x, y, width, height)
+    refresh
+  end
+  
+  #--------------------------------------------------------------------------
+  # item_max
+  #--------------------------------------------------------------------------
+  def item_max
+    3
+  end
+
+  #--------------------------------------------------------------------------
+  # draw_item
+  #--------------------------------------------------------------------------
+  def draw_item(index)
+    rect = item_rect(index)
+    rect.width -= 4
+    text = sprintf("\eI[%d]", $data_skills[1].icon_index) if index == 0 || index == 1
+    text = sprintf("\eI[%d]", YEA::SLOT_BATTLE::IDLE_ICON) if index == 2
+    text += "Attack" if index == 0
+    text += "Guard" if index == 1
+    text += YEA::SLOT_BATTLE::IDLE_TEXT if index == 2
+    draw_text_ex(rect.x, rect.y, text)
+  end
+  
+end # Window_BSCurrentSlots
+
+#==============================================================================
+# Å° Window_ItemList
+#==============================================================================
+
+class Window_ItemList < Window_Selectable
+  
+  #--------------------------------------------------------------------------
+  # alias method: col_max
+  #--------------------------------------------------------------------------
+  alias slot_battle_col_max col_max
+  def col_max
+    return SceneManager.scene_is?(Scene_PickSlots) ? 1 : slot_battle_col_max
+  end
+  
+end # Window_ItemList
+
+#==============================================================================
+# Å° Window_SkillList
+#==============================================================================
+
+class Window_SkillList < Window_Selectable
+  
+  #--------------------------------------------------------------------------
+  # alias method: col_max
+  #--------------------------------------------------------------------------
+  alias slot_battle_col_max col_max
+  def col_max
+    return SceneManager.scene_is?(Scene_PickSlots) ? 1 : slot_battle_col_max
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: enable?
+  #--------------------------------------------------------------------------
+  alias slot_battle_enable? enable?
+  def enable?(item)
+    SceneManager.scene_is?(Scene_PickSlots) ? true : slot_battle_enable?(item)
+  end
+    
+end # Window_SkillList
+
+#==============================================================================
+# Å° Window_BSSlotPreset
+#==============================================================================
+
+class Window_BSSlotPreset < Window_Selectable
+  
+  #--------------------------------------------------------------------------
+  # initialize
+  #--------------------------------------------------------------------------
+  def initialize(x, y)
+    super(x, y, 160, fitting_height(4))
+    refresh
+  end
+  
+  #--------------------------------------------------------------------------
+  # item_max
+  #--------------------------------------------------------------------------
+  def item_max
+    YEA::SLOT_BATTLE::MAX_PRESET
+  end
+  
+  #--------------------------------------------------------------------------
+  # draw_item
+  #--------------------------------------------------------------------------
+  def draw_item(index)
+    rect = item_rect(index)
+    rect.width -= 4
+    draw_text(rect, "Slots Set " + (index + 1).to_s, 1)
+  end
+  
+end
+
+#==============================================================================
+# Å° Window_BSActionCat
+#==============================================================================
+
+class Window_BSActionCat < Window_Selectable
+  
+  #--------------------------------------------------------------------------
+  # initialize
+  #--------------------------------------------------------------------------
+  def initialize(x, y)
+    super(x, y, 160, fitting_height(3))
+    refresh
+  end
+  
+  #--------------------------------------------------------------------------
+  # item_max
+  #--------------------------------------------------------------------------
+  def item_max
+    3
+  end
+  
+  #--------------------------------------------------------------------------
+  # draw_item
+  #--------------------------------------------------------------------------
+  def draw_item(index)
+    rect = item_rect(index)
+    rect.width -= 4
+    draw_text(rect, "Skills", 1) if index == 0
+    draw_text(rect, "Items", 1) if index == 1
+    draw_text(rect, "Actions", 1) if index == 2
+  end
+  
+end
+
+#==============================================================================
+# Å° Window_BSItemCommand
+#==============================================================================
+
+class Window_BSItemCommand < Window_Command
+  
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_reader   :item_window
+  
+  #--------------------------------------------------------------------------
+  # initialize
+  #--------------------------------------------------------------------------
+  def initialize(x, y)
+    super(x, y)
+  end
+  
+  #--------------------------------------------------------------------------
+  # window_width
+  #--------------------------------------------------------------------------
+  def window_width
+    return 160
+  end
+  
+  #--------------------------------------------------------------------------
+  # visible_line_number
+  #--------------------------------------------------------------------------
+  def visible_line_number
+    return 4
+  end
+  
+  #--------------------------------------------------------------------------
+  # update
+  #--------------------------------------------------------------------------
+  def update
+    super
+    @item_window.category = current_symbol if @item_window
+  end
+  
+  #--------------------------------------------------------------------------
+  # make_command_list
+  #--------------------------------------------------------------------------
+  def make_command_list
+    add_command(Vocab::item,     :item)
+    add_command(Vocab::weapon,   :weapon)
+    add_command(Vocab::armor,    :armor)
+    add_command(Vocab::key_item, :key_item)
+  end
+  
+  #--------------------------------------------------------------------------
+  # item_window=
+  #--------------------------------------------------------------------------
+  def item_window=(item_window)
+    @item_window = item_window
+    update
+  end
+  
+end
+
+#==============================================================================
+# Å° Window_BSConfirm
+#==============================================================================
+
+class Window_BSConfirm < Window_Command
+  
+  #--------------------------------------------------------------------------
+  # initialize
+  #--------------------------------------------------------------------------
+  def initialize(x, y, battle = false)
+    super(x, y)
+    @battle = battle
+  end
+  
+  #--------------------------------------------------------------------------
+  # window_width
+  #--------------------------------------------------------------------------
+  def window_width
+    return 160
+  end
+  
+  #--------------------------------------------------------------------------
+  # visible_line_number
+  #--------------------------------------------------------------------------
+  def visible_line_number
+    return 2
+  end
+  
+  #--------------------------------------------------------------------------
+  # visible_line_number
+  #--------------------------------------------------------------------------
+  def battle=(battle)
+    @battle = battle
+    refresh
+  end
+  
+  #--------------------------------------------------------------------------
+  # make_command_list
+  #--------------------------------------------------------------------------
+  def make_command_list
+    add_command("Edit",     :edit)
+    add_command(YEA::SLOT_BATTLE::MAKE_DEFAULT_TEXT,   :confirm)
+  end
+  
+end
+
+#==============================================================================
+# Å° Window_BattleCurrentSlots
+#==============================================================================
+
+class Window_BattleCurrentSlots < Window_Base
+  
+  #--------------------------------------------------------------------------
+  # initialize
+  #--------------------------------------------------------------------------
+  def initialize
+    dw = [Graphics.width/2, 320].max
+    super(-12, 0, dw, fitting_height(YEA::SLOT_BATTLE::MAX_SLOT + 1))
+    self.z = 200
+    self.opacity = 0
+    @battler = nil
+    hide
+  end
+  
+  #--------------------------------------------------------------------------
+  # change_battler
+  #--------------------------------------------------------------------------
+  def change_battler(battler)
+    @battler = battler
+    refresh
+  end
+  
+  #--------------------------------------------------------------------------
+  # battler
+  #--------------------------------------------------------------------------
+  def battler
+    return @battler
+  end
+  
+  #--------------------------------------------------------------------------
+  # refresh
+  #--------------------------------------------------------------------------
+  def refresh
+    return if !@battler
+    return if !@battler.current_slots
+    self.y = Graphics.height - fitting_height(4)
+    self.y -= fitting_height(@battler.current_slots.size + 1)
+    contents.clear
+    draw_background_colour
+    draw_horz_line(0)
+    draw_title
+    draw_slots
+  end
+  
+  #--------------------------------------------------------------------------
+  # draw_background_colour
+  #--------------------------------------------------------------------------
+  def draw_background_colour
+    dh = line_height * (@battler.current_slots.size + 1)
+    rect = Rect.new(0, 0, contents.width, dh)
+    back_colour1 = Color.new(0, 0, 0, 192)
+    back_colour2 = Color.new(0, 0, 0, 0)
+    contents.gradient_fill_rect(rect, back_colour1, back_colour2)
+  end
+  
+  #--------------------------------------------------------------------------
+  # draw_horz_line
+  #--------------------------------------------------------------------------
+  def draw_horz_line(dy)
+    line_y = dy + line_height - 2
+    line_colour = normal_color
+    line_colour.alpha = 48
+    contents.fill_rect(0, line_y, contents.width, 2, line_colour)
+  end
+  
+  #--------------------------------------------------------------------------
+  # draw_title
+  #--------------------------------------------------------------------------
+  def draw_title
+    reset_font_settings
+    text = @battler.name + YEA::SLOT_BATTLE::BATTLE_SLOTS_TITLE
+    contents.font.size = YEA::SLOT_BATTLE::BATTLE_SLOTS_TITLE_SIZE
+    contents.font.bold = true
+    contents.font.italic = true
+    draw_text(12, 0, contents.width - 12, line_height, text)
+    reset_font_settings
+  end
+  
+  #--------------------------------------------------------------------------
+  # draw_slots
+  #--------------------------------------------------------------------------
+  def draw_slots
+    dx = 24
+    dy = line_height
+    i = 0
+    for cur_act in @battler.current_slots
+      next if !cur_act
+      i += 1
+      cur_name = cur_act.item ? cur_act.item.name : YEA::SLOT_BATTLE::IDLE_TEXT
+      cur_icon = cur_act.item ? cur_act.item.icon_index : YEA::SLOT_BATTLE::IDLE_ICON
+      if SceneManager.scene.turn_count % YEA::SLOT_BATTLE::MAX_SLOT == 0 && i == YEA::SLOT_BATTLE::MAX_SLOT
+        text = "\eC[17]"
+      elsif SceneManager.scene.turn_count % YEA::SLOT_BATTLE::MAX_SLOT == i
+        text = "\eC[17]"
+      else
+        text = ""
+      end
+      text += sprintf("Turn %d: ", i)
+      text += sprintf("\eI[%d]", cur_icon)
+      text += cur_name
+      draw_text_ex(dx, dy, text)
+      dy += line_height
+    end
+  end
+  
+end # Window_BattleCurrentSlots
+
+#==============================================================================
+# Å° Window_PartyCommand
+#==============================================================================
+
+class Window_PartyCommand < Window_Command
+  
+  #--------------------------------------------------------------------------
+  # alias method: make_command_list
+  #--------------------------------------------------------------------------
+  alias slot_battle_make_command_list make_command_list
+  def make_command_list
+    slot_battle_make_command_list
+    add_command(YEA::SLOT_BATTLE::EDIT_SLOTS,  :editslot)
+  end
+
+end # Window_PartyCommand
+
+#==============================================================================
+# Å° Scene_Battle
+#==============================================================================
+
+class Scene_Battle < Scene_Base
+  
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_accessor :turn_count
+  
+  #--------------------------------------------------------------------------
+  # alias method: create_all_windows
+  #--------------------------------------------------------------------------
+  alias scene_battle_create_all_windows_yabss create_all_windows
+  def create_all_windows
+    scene_battle_create_all_windows_yabss
+    create_slot_skill_window
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: create_slot_skill_window
+  #--------------------------------------------------------------------------
+  def create_slot_skill_window
+    @slot_skill_window = Window_BattleCurrentSlots.new
+  end
+  
+  #--------------------------------------------------------------------------
+  # overwrite method: process_action
+  #--------------------------------------------------------------------------
+  def process_action
+    if @actor_window.active == false && @enemy_window.active == false
+      return if scene_changing?
+      if !@subject || !@subject.current_action
+        @subject = BattleManager.next_subject
+      end
+      return turn_end unless @subject
+      if @subject.current_action
+        if @subject.current_action.valid?
+          @status_window.open
+          execute_action
+        else
+          @log_window.add_text(sprintf("%s cannot use \eI[%d]%s!", @subject.name, @subject.current_action.item.icon_index, @subject.current_action.item.name))
+          4.times do @log_window.wait end
+          @log_window.back_one
+          if YEA::SLOT_BATTLE::ACTION_IF_FAIL == 0
+            @subject.remove_current_action
+            @subject.slot_acted = true if @subject.actor?
+          else
+            if YEA::SLOT_BATTLE::ACTION_IF_FAIL == 1
+              @subject.current_action.set_attack
+              @log_window.add_text(sprintf("%s switch to \eI[%d]%s!", @subject.name, @subject.current_action.item.icon_index, @subject.current_action.item.name))
+              3.times do @log_window.wait end
+              @log_window.back_one              
+            elsif YEA::SLOT_BATTLE::ACTION_IF_FAIL == 2
+              @subject.current_action.set_guard
+              @log_window.add_text(sprintf("%s switch to \eI[%d]%s!", @subject.name, @subject.current_action.item.icon_index, @subject.current_action.item.name))
+              3.times do @log_window.wait end
+              @log_window.back_one              
+            end
+          end
+        end
+      end
+      process_action_end unless @subject.current_action
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: use_item
+  #--------------------------------------------------------------------------
+  alias slot_battle_use_item use_item
+  def use_item
+    if @subject.actor? && (@subject != @slot_skill_window.battler || !@slot_skill_window.visible)
+      @slot_skill_window.show
+      @slot_skill_window.change_battler(@subject)
+    end
+    if @subject.actor? && !@subject.input.item.for_random? && !@subject.input.item.for_all? && !@subject.input.item.for_user?
+      select_actor_selection if !@choosing && @subject.actor? && @subject.input.item.for_friend?
+      select_enemy_selection if !@choosing && @subject.actor? && @subject.input.item.for_opponent?
+    end
+    @subject.current_action.prepare
+    if @actor_window.active == false && @enemy_window.active == false
+      @slot_skill_window.hide if @slot_skill_window.visible
+      slot_battle_use_item
+      @subject.remove_current_action
+      @subject.slot_acted = true if @subject.actor?
+      @choosing = false
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # overwrite method: command_fight
+  #--------------------------------------------------------------------------
+  def command_fight
+    i = 0
+    @turn_count = 0 if !@turn_count
+    @turn_count += 1
+    for actor in $game_party.members
+      actor.slot_acted = false
+      if actor.actions.size > YEA::SLOT_BATTLE::MAX_SLOT - @turn_count + 1
+        actor.actions.shift
+      end
+      if !actor.actions || actor.actions.size == 0
+        actor.command_slot_preset(actor.default_preset_id)
+      end
+    end
+    turn_start
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: select_actor_selection
+  #--------------------------------------------------------------------------
+  alias slot_battle_select_actor_selection select_actor_selection
+  def select_actor_selection
+    slot_battle_select_actor_selection
+    @choosing = true
+  end
+
+  #--------------------------------------------------------------------------
+  # alias method: select_enemy_selection
+  #--------------------------------------------------------------------------
+  alias slot_battle_select_enemy_selection select_enemy_selection
+  def select_enemy_selection
+    slot_battle_select_enemy_selection
+    @choosing = true
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: next_command
+  #--------------------------------------------------------------------------
+  alias slot_battle_next_command next_command
+  def next_command
+    if !BattleManager.in_turn? || @edit_slots_enable
+      slot_battle_next_command    
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: next_command
+  #--------------------------------------------------------------------------
+  alias slot_battle_create_party_command_window create_party_command_window
+  def create_party_command_window
+    slot_battle_create_party_command_window
+    @party_command_window.set_handler(:editslot,  method(:command_edit_slot_choose))
+  end
+   
+  #--------------------------------------------------------------------------
+  # new method: command_edit_slot_choose
+  #--------------------------------------------------------------------------
+  def command_edit_slot_choose
+    @turn_count = 0 if !@turn_count
+    if @turn_count % YEA::SLOT_BATTLE::MAX_SLOT == 0
+      @edit_slots_enable = true
+      @party_command_window.deactivate
+      @actor_window.x += @party_command_window.width
+      select_actor_selection
+      @choosing = false
+    else
+      @log_window.add_text("Cannot Edit and Switch now.")
+      4.times do @log_window.wait end
+      @log_window.back_one
+      @party_command_window.select(0)
+      @party_command_window.activate
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # overwrite method: on_actor_ok
+  #--------------------------------------------------------------------------
+  def on_actor_ok
+    if !@edit_slots_enable
+      bs_on_actor_cancel
+      BattleManager.actor.input.clear
+      @status_aid_window.refresh
+      $game_temp.battle_aid = nil
+      scene_battle_on_actor_cancel
+      case @actor_command_window.current_symbol
+      when :skill
+        @skill_window.show
+      when :item
+        @item_window.show
+      end
+    end
+    if @edit_slots_enable
+      @status_window.show
+      @status_window.refresh
+      $game_temp.battle_aid = nil
+      @status_aid_window.hide
+      @help_window.hide
+      @actor_window.hide
+      @actor_window.x = 0
+      command_edit_slot(@actor_window.index)
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # overwrite method: on_actor_cancel
+  #--------------------------------------------------------------------------
+  def on_actor_cancel
+    if !@edit_slots_enable
+      bs_on_actor_cancel
+      scene_battle_on_actor_cancel 
+    else
+      @actor_window.hide
+      @actor_window.x = 0
+      @status_aid_window.refresh
+      $game_temp.battle_aid = nil
+      @status_window.show
+      @status_aid_window.hide
+      @help_window.hide
+      @status_window.refresh
+      @help_window.clear
+      @party_command_window.show
+      @party_command_window.select(2)
+      @party_command_window.activate
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # overwrite method: on_enemy_cancel
+  #--------------------------------------------------------------------------
+  def on_enemy_cancel
+    bs_on_enemy_cancel
+    @status_aid_window.refresh
+    $game_temp.battle_aid = nil
+    scene_battle_on_enemy_cancel_abe
+    if @skill_window.visible or @item_window.visible
+      @help_window.show
+    else
+      @help_window.hide
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # overwrite method: method: battle_start
+  #--------------------------------------------------------------------------
+  def battle_start
+    scene_battle_battle_start_abe
+    if compatible_slot_battle_yea_be
+      return compatible_slot_battle_yea_be_do
+    else
+      return unless YEA::BATTLE::SKIP_PARTY_COMMAND
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # overwrite method: turn_end
+  #--------------------------------------------------------------------------
+  def turn_end
+    all_battle_members.each do |battler|
+      battler.on_turn_end
+      status_redraw_target(battler)
+      @log_window.display_auto_affected_status(battler)
+      @log_window.wait_and_clear
+    end
+    update_party_cooldowns if $imported["YEA-CommandParty"]
+    BattleManager.turn_end
+    process_event
+    start_party_command_selection
+    if compatible_slot_battle_yea_be
+      return compatible_slot_battle_yea_be_do
+    else
+      return unless YEA::BATTLE::SKIP_PARTY_COMMAND
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: command_edit_slot
+  #--------------------------------------------------------------------------
+  def command_edit_slot(index)
+    Graphics.freeze
+    @info_viewport.visible = false
+    SceneManager.snapshot_for_background
+    actor = $game_party.battle_members[index]
+    $game_party.menu_actor = actor
+    oy = @party_command_window.oy
+    #---
+    SceneManager.call(Scene_PickSlots)
+    SceneManager.scene.main
+    SceneManager.force_recall(self)
+    #---
+    @info_viewport.visible = true
+    @status_window.refresh
+    @help_window.clear
+    @party_command_window.show
+    @party_command_window.select(0)
+    @party_command_window.oy = oy
+    @party_command_window.activate
+    perform_transition
+    @edit_slots_enable = false
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: bs_on_actor_cancel
+  #--------------------------------------------------------------------------
+  def bs_on_actor_cancel
+    return
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: bs_on_enemy_cancel
+  #--------------------------------------------------------------------------
+  def bs_on_enemy_cancel
+    return
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: compatible_slot_battle_yea_be
+  #--------------------------------------------------------------------------
+  def compatible_slot_battle_yea_be
+    @turn_count = 0 if !@turn_count
+    return @turn_count % YEA::SLOT_BATTLE::MAX_SLOT == 0
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: compatible_slot_battle_yea_be
+  #--------------------------------------------------------------------------
+  def compatible_slot_battle_yea_be_do
+    return
+  end
+  
+end # Scene_Battle
+
+#==============================================================================
+# Å° Scene_PickSlots
+#==============================================================================
+
+class Scene_PickSlots < Scene_MenuBase
+  
+  #--------------------------------------------------------------------------
+  # start
+  #--------------------------------------------------------------------------
+  def start
+    super
+    create_status_window
+    create_help_window
+    @help_window.y += @status_window.height
+    create_set_window
+    create_action_window
+    create_cat_window
+    create_slot_window
+    create_item_window
+    create_skill_window
+    create_acts_window
+    @create_done = true
+    @set_window.activate
+    @set_window.index = 0
+    update
+  end
+  
+  #--------------------------------------------------------------------------
+  # update
+  #--------------------------------------------------------------------------
+  def update
+    super
+    if @create_done
+      @slot_window.preset_id = @set_window.index
+      if @action_window.active
+        if @action_window.index == 0
+          @item_window.hide
+          @acts_window.hide
+          @skill_window.show
+        elsif @action_window.index == 1
+          @item_window.show
+          @skill_window.hide
+          @acts_window.hide
+        elsif @action_window.index == 2
+          @acts_window.show
+          @skill_window.hide
+          @item_window.hide
+        end
+      end
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # create_status_window
+  #--------------------------------------------------------------------------
+  def create_status_window
+    @status_window = Window_SkillStatus.new(160, 0)
+    @status_window.viewport = @viewport
+    @status_window.actor = @actor
+  end
+  
+  #--------------------------------------------------------------------------
+  # create_set_window
+  #--------------------------------------------------------------------------
+  def create_set_window
+    @set_window = Window_BSSlotPreset.new(0, 0)
+    @set_window.viewport = @viewport
+    @set_window.help_window = @help_window
+    @set_window.z = 100
+    @set_window.set_handler(:ok,     method(:on_set_ok))
+    @set_window.set_handler(:cancel, method(:return_scene))
+  end
+  
+  #--------------------------------------------------------------------------
+  # on_set_ok
+  #--------------------------------------------------------------------------
+  def on_set_ok
+    if !@confirm_window
+      @confirm_window = Window_BSConfirm.new(@set_window.width / 2, 0)
+      @confirm_window.viewport = @viewport
+      @confirm_window.z = 101
+      @confirm_window.set_handler(:edit,     method(:on_slot_edit))
+      @confirm_window.set_handler(:confirm, method(:on_slot_confirm))
+      @confirm_window.set_handler(:cancel, method(:on_slot_cancel))
+    end
+    @confirm_window.show
+    @confirm_window.select(0)
+    @confirm_window.activate
+    @set_window.deactivate
+  end
+  
+  #--------------------------------------------------------------------------
+  # on_slot_edit
+  #--------------------------------------------------------------------------
+  def on_slot_edit
+    @slot_window.activate
+    @slot_window.select(0)
+    @confirm_window.deactivate
+    @confirm_window.hide
+  end
+  
+  #--------------------------------------------------------------------------
+  # on_slot_confirm
+  #--------------------------------------------------------------------------
+  def on_slot_confirm
+    @set_window.activate
+    @confirm_window.deactivate
+    @confirm_window.hide
+    @actor.default_preset_id = @set_window.index
+    @actor.default_preset_id = 0 if @slot_window.index < 0
+  end
+  
+  #--------------------------------------------------------------------------
+  # create_action_window
+  #--------------------------------------------------------------------------
+  def create_action_window
+    @action_window = Window_BSActionCat.new(0, 0)
+    @action_window.viewport = @viewport
+    @action_window.help_window = @help_window
+    @action_window.x = (Graphics.width - @action_window.width) / 2
+    @action_window.y = (Graphics.height - @action_window.height) / 2
+    @action_window.z = 100
+    @action_window.set_handler(:ok,     method(:on_action_ok))
+    @action_window.set_handler(:cancel, method(:on_action_cancel))
+    @action_window.index = 0
+    @action_window.hide
+    @action_window.deactivate
+  end
+  
+  #--------------------------------------------------------------------------
+  # on_action_ok
+  #--------------------------------------------------------------------------
+  def on_action_ok
+    if @action_window.index == 0
+      @skill_category_window.show
+      @skill_category_window.activate
+    elsif @action_window.index == 1
+      @item_category_window.show
+      @item_category_window.activate
+    elsif @action_window.index == 2
+      @acts_window.activate      
+      @acts_window.index = 0
+    end
+    @action_window.deactivate
+    @action_window.hide
+  end
+  
+  #--------------------------------------------------------------------------
+  # on_action_cancel
+  #--------------------------------------------------------------------------
+  def on_action_cancel
+    @action_window.deactivate
+    @action_window.hide
+    @slot_window.activate
+  end
+
+  #--------------------------------------------------------------------------
+  # create_cat_window
+  #--------------------------------------------------------------------------
+  def create_cat_window
+    @item_category_window = Window_BSItemCommand.new(0, 0)
+    @item_category_window.viewport = @viewport
+    @item_category_window.help_window = @help_window
+    @item_category_window.x = (Graphics.width * 1.5 - @item_category_window.width) / 2
+    @item_category_window.y = @help_window.height / 2 + @status_window.height / 2 + (Graphics.height - @item_category_window.height) / 2
+    @item_category_window.z = 50
+    @item_category_window.set_handler(:ok,     method(:on_item_category_ok))
+    @item_category_window.set_handler(:cancel, method(:on_item_category_cancel))
+    @item_category_window.index = 0
+    @item_category_window.hide
+    @item_category_window.deactivate
+    @skill_category_window = Window_SkillCommand.new(0, 0)
+    @skill_category_window.viewport = @viewport
+    @skill_category_window.help_window = @help_window
+    @skill_category_window.x = (Graphics.width * 1.5 - @skill_category_window.width) / 2
+    @skill_category_window.y = @help_window.height / 2 + @status_window.height / 2 + (Graphics.height - @item_category_window.height) / 2
+    @skill_category_window.z = 50
+    @skill_category_window.actor = @actor
+    @skill_category_window.set_handler(:ok,     method(:on_skill_category_ok))
+    @skill_category_window.set_handler(:cancel, method(:on_skill_category_cancel))
+    @skill_category_window.index = 0
+    @skill_category_window.hide
+    @skill_category_window.deactivate
+  end
+  
+  #--------------------------------------------------------------------------
+  # on_item_category_ok
+  #--------------------------------------------------------------------------
+  def on_item_category_ok
+    @item_category_window.hide
+    @item_category_window.deactivate
+    @item_window.activate
+    @item_window.index = 0
+  end
+  
+  #--------------------------------------------------------------------------
+  # on_item_category_cancel
+  #--------------------------------------------------------------------------
+  def on_item_category_cancel
+    @item_category_window.hide
+    @item_category_window.deactivate
+    @action_window.show
+    @action_window.activate
+  end
+  
+  #--------------------------------------------------------------------------
+  # on_skill_category_ok
+  #--------------------------------------------------------------------------
+  def on_skill_category_ok
+    @skill_category_window.hide
+    @skill_category_window.deactivate
+    @skill_window.activate
+    @skill_window.index = 0
+  end
+  
+  #--------------------------------------------------------------------------
+  # on_skill_category_cancel
+  #--------------------------------------------------------------------------
+  def on_skill_category_cancel
+    @skill_category_window.hide
+    @skill_category_window.deactivate
+    @action_window.show
+    @action_window.activate
+  end
+  
+  #--------------------------------------------------------------------------
+  # create_slot_window
+  #--------------------------------------------------------------------------
+  def create_slot_window
+    @slot_window = Window_BSCurrentSlots.new(0, 0, Graphics.width / 2, Graphics.height - @help_window.height - @status_window.height, @actor)
+    @slot_window.viewport = @viewport
+    @slot_window.y = @help_window.height + @status_window.height
+    @slot_window.z = 1
+    @slot_window.set_handler(:ok,     method(:on_slot_ok))
+    @slot_window.set_handler(:cancel, method(:on_slot_cancel))
+    @slot_window.deactivate
+  end
+  
+  #--------------------------------------------------------------------------
+  # on_slot_ok
+  #--------------------------------------------------------------------------
+  def on_slot_ok
+    @slot_window.deactivate
+    @action_window.show
+    @action_window.activate
+  end
+  
+  #--------------------------------------------------------------------------
+  # on_slot_cancel
+  #--------------------------------------------------------------------------
+  def on_slot_cancel
+    @slot_window.deactivate
+    @set_window.activate
+    @confirm_window.deactivate
+    @confirm_window.hide
+  end
+  
+  #--------------------------------------------------------------------------
+  # create_item_window
+  #--------------------------------------------------------------------------
+  def create_item_window
+    @item_window = Window_ItemList.new(@slot_window.width, @help_window.height + @status_window.height, Graphics.width / 2, Graphics.height - @help_window.height - @status_window.height)
+    @item_window.viewport = @viewport
+    @item_window.help_window = @help_window
+    @item_window.z = 1
+    @item_window.set_handler(:ok,     method(:on_item_ok))
+    @item_window.set_handler(:cancel, method(:on_item_cancel))
+    @item_category_window.item_window = @item_window
+    @item_window.unselect
+    @item_window.deactivate
+    @item_window.hide
+  end
+  
+  #--------------------------------------------------------------------------
+  # on_item_ok
+  #--------------------------------------------------------------------------
+  def on_item_ok
+    @item_window.deactivate
+    @slot_window.activate
+    @slot_window.item.set_item(@item_window.item.id)
+    @slot_window.refresh
+    @item_window.unselect
+    @help_window.clear
+  end
+  
+  #--------------------------------------------------------------------------
+  # on_item_cancel
+  #--------------------------------------------------------------------------
+  def on_item_cancel
+    @item_window.unselect
+    @item_window.deactivate
+    @item_category_window.show
+    @item_category_window.activate
+    @help_window.clear
+  end
+  
+  #--------------------------------------------------------------------------
+  # create_skill_window
+  #--------------------------------------------------------------------------
+  def create_skill_window
+    @skill_window = Window_SkillList.new(@slot_window.width, @help_window.height + @status_window.height, Graphics.width / 2, Graphics.height - @help_window.height - @status_window.height)
+    @skill_window.viewport = @viewport
+    @skill_window.help_window = @help_window
+    @skill_window.z = 1
+    @skill_window.set_handler(:ok,     method(:on_skill_ok))
+    @skill_window.set_handler(:cancel, method(:on_skill_cancel))
+    @skill_window.actor = @actor
+    @skill_category_window.skill_window = @skill_window
+    @skill_window.unselect
+    @skill_window.deactivate
+  end
+  
+  #--------------------------------------------------------------------------
+  # on_skill_ok
+  #--------------------------------------------------------------------------
+  def on_skill_ok
+    @skill_window.deactivate
+    @slot_window.activate
+    @slot_window.item.set_skill(@skill_window.item.id)
+    @slot_window.refresh
+    @skill_window.unselect
+    @help_window.clear
+  end
+  
+  #--------------------------------------------------------------------------
+  # on_skill_cancel
+  #--------------------------------------------------------------------------
+  def on_skill_cancel
+    @skill_window.unselect
+    @skill_window.deactivate
+    @skill_category_window.show
+    @skill_category_window.activate
+    @help_window.clear
+  end
+  
+  #--------------------------------------------------------------------------
+  # create_acts_window
+  #--------------------------------------------------------------------------
+  def create_acts_window
+    @acts_window = Window_ActsList.new(@slot_window.width, @help_window.height + @status_window.height, Graphics.width / 2, Graphics.height - @help_window.height - @status_window.height)
+    @acts_window.viewport = @viewport
+    @acts_window.help_window = @help_window
+    @acts_window.z = 1
+    @acts_window.set_handler(:ok,     method(:on_acts_ok))
+    @acts_window.set_handler(:cancel, method(:on_acts_cancel))
+    @acts_window.unselect
+    @acts_window.deactivate
+    @acts_window.hide
+  end
+  
+  #--------------------------------------------------------------------------
+  # on_skill_ok
+  #--------------------------------------------------------------------------
+  def on_acts_ok
+    @acts_window.deactivate
+    @slot_window.activate
+    @slot_window.item.set_attack if @acts_window.index == 0
+    @slot_window.item.set_guard if @acts_window.index == 1
+    @slot_window.item.clear if @acts_window.index == 2
+    @slot_window.refresh
+    @acts_window.unselect
+    @help_window.clear
+  end
+  
+  #--------------------------------------------------------------------------
+  # on_skill_cancel
+  #--------------------------------------------------------------------------
+  def on_acts_cancel
+    @acts_window.unselect
+    @acts_window.deactivate
+    @action_window.show
+    @action_window.activate
+    @help_window.clear
+  end
+  
+end # Scene_PickSlots
+
+#==============================================================================
+# Å° Window_MenuCommand
+#==============================================================================
+
+class Window_MenuCommand < Window_Command
+  
+  #--------------------------------------------------------------------------
+  # alias method: add_formation_command
+  #--------------------------------------------------------------------------
+  alias window_menucommand_add_formation_command_besb add_formation_command
+  def add_formation_command
+    add_sslots_command unless $imported["YEA-AceMenuEngine"]
+    window_menucommand_add_formation_command_besb
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: add_sslots_command
+  #--------------------------------------------------------------------------
+  def add_sslots_command
+    text = YEA::SLOT_BATTLE::EDIT_SLOTS
+    add_command(text, :sslots, main_commands_enabled)
+  end
+  
+end # Window_MenuCommand
+
+#==============================================================================
+# Å° Scene_Menu
+#==============================================================================
+
+class Scene_Menu < Scene_MenuBase
+  
+  #--------------------------------------------------------------------------
+  # alias method: create_command_window
+  #--------------------------------------------------------------------------
+  alias scene_menu_create_command_window_besb create_command_window
+  def create_command_window
+    scene_menu_create_command_window_besb
+    @command_window.set_handler(:sslots, method(:command_personal))
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: on_personal_ok
+  #--------------------------------------------------------------------------
+  alias scene_menu_on_personal_ok_besb on_personal_ok
+  def on_personal_ok
+    case @command_window.current_symbol
+    when :sslots
+      SceneManager.call(Scene_PickSlots)
+    else
+      scene_menu_on_personal_ok_besb
+    end
+  end
+  
+end # Scene_Menu
+
+#==============================================================================
+# 
+# Å• End of File
+# 
+#==============================================================================

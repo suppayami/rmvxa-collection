@@ -1,0 +1,213 @@
+﻿#==============================================================================
+# 
+# ▼ YSA Battle Add-on: Lunatic CATB Reset
+# -- Last Updated: 2012.01.27
+# -- Level: Easy, Normal
+# -- Requires: 
+#       - YEA - Ace Battle Engine v1.15+
+#       - YSA Battle System: Classical ATB v1.07+
+# 
+#==============================================================================
+
+$imported = {} if $imported.nil?
+$imported["YSA-LunaticCATBReset"] = true
+
+#==============================================================================
+# ▼ Updates
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2012.01.27 - Started Script and Finished.
+# 
+#==============================================================================
+# ▼ Introduction
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script decide how much ATB Gauge will be filled after action.
+# 
+#==============================================================================
+# ▼ Instructions
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# To install this script, open up your script editor and copy/paste this script
+# to an open slot below ▼ Materials/素材 but above ▼ Main. Remember to save.
+# 
+#==============================================================================
+# ▼ Compatibility
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script is made strictly for RPG Maker VX Ace. It is highly unlikely that
+# it will run with RPG Maker VX without adjusting.
+# 
+# This script requires Yanfly Engine Ace - Ace Battle Engine v1.15+ and the
+# script must be placed under Ace Battle Engine in the script listing.
+# 
+#==============================================================================
+
+class Game_Battler < Game_BattlerBase
+  
+  #--------------------------------------------------------------------------
+  # ● Welcome to Lunatic Mode
+  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  # Lunatic CATB Reset Formulas calculates actors/enemies ATB filling after an
+  # action. 
+  # Use the following notetag to assign the formulas to be used.
+  # NOTE: You can use this with Item or Skill.
+  # NOTE2: MAX_CATB_VALUE = 100000.0
+  # 
+  #     <custom catb reset: string>
+  #
+  # The formula <custom catb reset: common rate> will be used when you don't have
+  # any formulas are being used.
+  #
+  # You can use as many as you want formulas by using this notetag.
+  #
+  #     <custom catb reset>
+  #      string
+  #      string
+  #     </custom catb reset>
+  #
+  # All of the string information in between those two notetags will be
+  # stored the same way as the notetags shown before those. There is no
+  # difference between using either.
+  #--------------------------------------------------------------------------
+  
+  MAX_CATB_VALUE = 100000.0
+  
+  def lunatic_catb_reset_formula
+    formulas = []
+    formulas = self.current_action.item.catb_reset
+    value = 0
+    for formula in formulas
+      case formula.upcase
+      
+      #----------------------------------------------------------------------
+      # ATB Reset Formula No.1: RESET PERCENT
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      # Set ATB filling to x percent.
+      # 
+      # Formula notetag:
+      #   <custom catb reset: reset percent x%>
+      #----------------------------------------------------------------------
+      when /RESET PERCENT[ ](\d+)([%％])/i
+        value = MAX_CATB_VALUE * $1.to_i / 100
+        
+      #----------------------------------------------------------------------
+      # ATB Reset Formula No.2: RESET VALUE
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      # Set ATB filling to x value.
+      # 
+      # Formula notetag:
+      #   <custom catb reset: reset value x>
+      #----------------------------------------------------------------------
+      when /RESET VALUE[ ](\d+)/i
+        value = $1.to_i
+        
+      #----------------------------------------------------------------------
+      # ATB Starter Formula Default: COMMON RESET
+      #----------------------------------------------------------------------
+      when /COMMON RESET/i
+        value = 0
+        
+      #----------------------------------------------------------------------
+      # Stop editting past this point.
+      #----------------------------------------------------------------------
+      end # End case
+    end # End for
+    
+    #----------------------------------------------------------------------
+    # Return value.
+    #----------------------------------------------------------------------
+    return value
+    
+  end # End def
+  
+end # Game_Battler
+
+#==============================================================================
+# ▼ Editting anything past this point may potentially result in causing
+# computer damage, incontinence, explosion of user's head, coma, death, and/or
+# halitosis so edit at your own risk.
+#==============================================================================
+
+module YSA
+  module REGEXP
+  module BASEITEM
+    
+    CUSTOM_CATB_RESET_STR = /<(?:CUSTOM_CATB_RESET|custom catb reset):[ ](.*)>/i
+    CUSTOM_CATB_RESET_ON  = /<(?:CUSTOM_CATB_RESET|custom catb reset)>/i
+    CUSTOM_CATB_RESET_OFF = /<\/(?:CUSTOM_CATB_RESET|custom catb reset)>/i
+    
+  end # BASEITEM
+  end # REGEXP
+end # YSA
+
+#==============================================================================
+# ■ DataManager
+#==============================================================================
+
+module DataManager
+  
+  #--------------------------------------------------------------------------
+  # alias method: load_database
+  #--------------------------------------------------------------------------
+  class <<self; alias load_database_lcatbre load_database; end
+  def self.load_database
+    load_database_lcatbre
+    load_notetags_lcatbre
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: load_notetags_lcatbre
+  #--------------------------------------------------------------------------
+  def self.load_notetags_lcatbre
+    groups = [$data_skills, $data_items]
+    for group in groups
+      for obj in group
+        next if obj.nil?
+        obj.load_notetags_lcatbre
+      end
+    end
+  end
+  
+end # DataManager
+
+#==============================================================================
+# ■ RPG::UsableItem
+#==============================================================================
+
+class RPG::UsableItem < RPG::BaseItem
+  
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_accessor :catb_reset
+  
+  #--------------------------------------------------------------------------
+  # common cache: load_notetags_lcatbre
+  #--------------------------------------------------------------------------
+  def load_notetags_lcatbre
+    @catb_reset = []
+    @catb_reset_on = false
+    #---
+    self.note.split(/[\r\n]+/).each { |line|
+      case line
+      #---
+      when YSA::REGEXP::BASEITEM::CUSTOM_CATB_RESET_STR
+        @catb_reset.push($1.to_s)
+      #---
+      when YSA::REGEXP::BASEITEM::CUSTOM_CATB_RESET_ON
+        @catb_reset_on = true
+      when YSA::REGEXP::BASEITEM::CUSTOM_CATB_RESET_OFF
+        @catb_reset_on = false
+      #---
+      else
+        @catb_reset.push(line.to_s) if @catb_reset_on
+      end
+    } # self.note.split
+    #---
+    @catb_reset.push("COMMON RESET") if @catb_reset == []
+  end
+  
+end # RPG::UsableItem
+  
+#==============================================================================
+# 
+# ▼ End of File
+# 
+#==============================================================================

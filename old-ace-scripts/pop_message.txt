@@ -1,0 +1,334 @@
+﻿#==============================================================================
+# 
+# ▼ Yami Script Ace - YEA Message System Add-on: Bubble Message
+# -- Last Updated: 2012.01.09
+# -- Level: Normal
+# -- Requires: Yanfly Engine Ace - Ace Message System v1.00+
+# 
+#==============================================================================
+
+$imported = {} if $imported.nil?
+$imported["YSA-BubbleMessage"] = true
+
+#==============================================================================
+# ▼ Updates
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2012.01.09 - Bugfix coordinate buffer.
+#            - Update placement for face.
+#            - Window flick.
+#            - Out screen.
+# 2012.01.05 - Update Coordinate buffer.
+#              Fix a placement error.
+# 2012.01.04 - Started and Finished script.
+# 
+#==============================================================================
+# ▼ Instructions
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# To install this script, open up your script editor and copy/paste this script
+# to an open slot below ▼ Materials/素材 but above ▼ Main. Remember to save.
+# 
+# -----------------------------------------------------------------------------
+# Message Window text Codes - These go inside of your message window.
+# -----------------------------------------------------------------------------
+#  Position:   Effect:
+#    \bm[x]    - Sets Message Window position to event x. *Note
+#    \cbm      - Cancel bubble message.
+#
+#              *Note: Set to 0 to sets position to Game Player.
+#
+#==============================================================================
+# ▼ Compatibility
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script is made strictly for RPG Maker VX Ace. It is highly unlikely that
+# it will run with RPG Maker VX without adjusting.
+#
+# This script requires Yanfly Engine Ace - Ace Message System v1.00+, put this
+# script below that one.
+# 
+#==============================================================================
+
+module YSA
+  module POP_MESSAGE
+    LIMIT_WIDTH = 480
+    LIMIT_LINE = 2
+    POP_X_BUFFER = 0
+    POP_Y_BUFFER = -36
+    
+    FACE_SPRITE_X_BUFFER = 8       # Buffer x position of the name window.
+    FACE_SPRITE_Y_BUFFER = 0       # Buffer y position of the name window.
+    FACE_X_BUFFER_WINDOW_HEIGHT = true
+
+    NAME_BUFFER_X_FROM_FACE = 112   # Only apply for Name Window left
+    
+    FADE_FACE = true
+    MOVE_FACE = true # Only for first time
+  end
+end
+
+#==============================================================================
+# ▼ Editting anything past this point may potentially result in causing
+# computer damage, incontinence, explosion of user's head, coma, death, and/or
+# halitosis so edit at your own risk.
+#==============================================================================
+
+#==============================================================================
+# ■ Game_Message
+#==============================================================================
+
+class Game_Message
+  
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_accessor :face_sprite
+  
+end # Game_Message
+
+#==============================================================================
+# ■ Scene_Map
+#==============================================================================
+
+class Scene_Map < Scene_Base
+  
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_accessor :spriteset
+  
+  #--------------------------------------------------------------------------
+  # alias method: update
+  #--------------------------------------------------------------------------
+  alias pop_message_update update
+  def update
+    pop_message_update
+    $game_message.face_sprite.update if $game_message.face_sprite
+  end
+   
+end # Scene_Map
+
+#==============================================================================
+# ■ Spriteset_Map
+#==============================================================================
+
+class Spriteset_Map
+  
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_accessor :character_sprites
+  attr_accessor :viewport1
+  
+end # Spriteset_Map
+
+#==============================================================================
+# ■ Sprite_Message_Face
+#==============================================================================
+
+class Window_Message_Face < Window_Base
+  
+  #--------------------------------------------------------------------------
+  # initialize
+  #--------------------------------------------------------------------------
+  def initialize
+    super(0, 0, 120, 120)
+    self.opacity = 0
+    self.visible = false
+    @disposing = false
+    @face_name = ""
+    @face_index = 0
+    @move_x = 0
+    self.z = 100
+  end
+  
+  #--------------------------------------------------------------------------
+  # set_face
+  #--------------------------------------------------------------------------
+  def set_face(x, y)
+    contents.clear
+    if !$game_message.face_name.empty?
+      draw_face($game_message.face_name, $game_message.face_index, 0, 0)
+      self.x = x
+      self.x += YSA::POP_MESSAGE::FACE_SPRITE_X_BUFFER
+      if (@face_name != $game_message.face_name || @face_index != $game_message.face_index) && YSA::POP_MESSAGE::MOVE_FACE
+        self.x -= 30
+        @move_x = 30
+        @face_name = $game_message.face_name
+        @face_index = $game_message.face_index
+        self.contents_opacity = 0 if YSA::POP_MESSAGE::FADE_FACE
+      end
+      self.y = y
+      self.y -= 96
+      self.y += YSA::POP_MESSAGE::FACE_SPRITE_Y_BUFFER
+      self.visible = true
+    else
+      self.visible = false
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # hide_face
+  #--------------------------------------------------------------------------
+  def hide_face
+    contents.clear
+    self.visible = false
+  end
+  
+  #--------------------------------------------------------------------------
+  # update
+  #--------------------------------------------------------------------------
+  def update
+    super
+    self.contents_opacity += 15 if self.contents_opacity < 255
+    unless @move_x <= 0
+      self.x += 2
+      @move_x -= 2
+    end
+  end
+  
+end # Sprite_Message_Face
+
+#==============================================================================
+# ■ Window_Message
+#==============================================================================
+
+class Window_Message < Window_Base
+  
+  #--------------------------------------------------------------------------
+  # alias method: message_escape_characters
+  #--------------------------------------------------------------------------
+  alias pop_message_message_escape_characters message_escape_characters
+  def message_escape_characters(result)
+    result.gsub!(/\eBM\[(\d+)\]/i) { event_pop_message_setup($1.to_i) }
+    result.gsub!(/\eCBM/i) { event_pop_message_setup(-1) }
+    result = pop_message_message_escape_characters(result)
+    return result
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: event_pop_message_setup
+  #--------------------------------------------------------------------------
+  def event_pop_message_setup(event_id)
+    @event_pop_id = event_id
+    return ""
+  end
+  
+  #--------------------------------------------------------------------------
+  # overwrite method: new_page
+  #--------------------------------------------------------------------------
+  def new_page(text, pos)
+    adjust_message_window_size(text)
+    window_message_new_page_ams(text, pos)
+    if SceneManager.scene_is?(Scene_Map) 
+      if @event_pop_id && @event_pop_id >= 0
+        contents.clear
+        $game_message.face_sprite = Window_Message_Face.new if !$game_message.face_sprite
+        $game_message.face_sprite.set_face(self.x, self.y)
+        $game_message.face_sprite.y += (self.height / 5) * 2 if YSA::POP_MESSAGE::FACE_X_BUFFER_WINDOW_HEIGHT
+        self.z = 98
+        @name_window.x = self.x + YSA::POP_MESSAGE::FACE_SPRITE_X_BUFFER + YSA::POP_MESSAGE::NAME_BUFFER_X_FROM_FACE if (@name_position == 1 || @name_position == 2) && $game_message.face_sprite
+      end
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: close
+  #--------------------------------------------------------------------------
+  alias pop_message_close close
+  def close
+    $game_message.face_sprite.hide_face if $game_message.face_sprite
+    pop_message_close
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: process_all_text
+  #--------------------------------------------------------------------------
+  alias pop_message_process_all_text process_all_text
+  def process_all_text
+    convert_escape_characters($game_message.all_text)
+    pop_message_process_all_text
+  end
+
+  #--------------------------------------------------------------------------
+  # alias method: update_placement
+  #--------------------------------------------------------------------------
+  alias event_pop_message_update_placement update_placement
+  def update_placement
+    if SceneManager.scene_is?(Scene_Map) 
+      if !@event_pop_id || @event_pop_id < 0
+        event_pop_message_update_placement
+        $game_message.face_sprite.hide_face if $game_message.face_sprite
+      elsif @event_pop_id == 0
+        hash = SceneManager.scene.spriteset.character_sprites
+        character = hash[hash.size - 1]
+        self.y = character.character.screen_y - self.height + YSA::POP_MESSAGE::POP_Y_BUFFER
+        self.x = character.character.screen_x - self.width / 2 + YSA::POP_MESSAGE::POP_X_BUFFER
+        if self.x < 0
+          self.x = 0
+        end
+        if self.y < 0
+          self.y = 64
+        end
+      elsif @event_pop_id > 0
+        hash = SceneManager.scene.spriteset.character_sprites
+        character = hash[@event_pop_id - 1]
+        self.y = character.character.screen_y - self.height + YSA::POP_MESSAGE::POP_Y_BUFFER
+        self.x = character.character.screen_x - self.width / 2 + YSA::POP_MESSAGE::POP_X_BUFFER
+        if self.x < 0
+          self.x = 0
+        end
+        if self.y < 0
+          self.y = 64
+        end
+      end
+    else
+      event_pop_message_update_placement
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: cal_number_line
+  #--------------------------------------------------------------------------
+  def cal_number_line(text)
+    result = 0
+    text.each_line { result += 1 }
+    return result
+  end
+
+  #--------------------------------------------------------------------------
+  # alias method: adjust_message_window_size
+  #--------------------------------------------------------------------------
+  alias yea_me_pop_engine_adjust_message_window_size adjust_message_window_size
+  def adjust_message_window_size(text = " ")
+    if SceneManager.scene_is?(Scene_Map) && @event_pop_id && @event_pop_id >= 0
+      n_line = cal_number_line(text) > YSA::POP_MESSAGE::LIMIT_LINE ? YSA::POP_MESSAGE::LIMIT_LINE : cal_number_line(text)
+      self.height = fitting_height(n_line)
+      self.width = text_size(text).width + 24
+      self.width += new_line_x
+      if self.width < YEA::MESSAGE::FACE_INDENT_X + YSA::POP_MESSAGE::FACE_SPRITE_X_BUFFER + @name_window.width
+        self.width += @name_window.width
+      end
+      if self.width > YSA::POP_MESSAGE::LIMIT_WIDTH
+        self.width = YSA::POP_MESSAGE::LIMIT_WIDTH
+      end
+      create_contents
+      update_placement
+      start_name_window
+    else
+      yea_me_pop_engine_adjust_message_window_size
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # overwrite method: new_line_x
+  #--------------------------------------------------------------------------
+  def new_line_x
+    return $game_message.face_name.empty? ? 0 : (YEA::MESSAGE::FACE_INDENT_X + YSA::POP_MESSAGE::FACE_SPRITE_X_BUFFER)
+  end
+  
+end # Window_Message
+
+#==============================================================================
+# 
+# ▼ End of File
+# 
+#==============================================================================

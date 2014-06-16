@@ -1,0 +1,158 @@
+#==============================================================================
+# 
+# Å• Yami Script Ace - Simple Anti-lag Event
+# -- Last Updated: 2012.01.07
+# -- Level: Easy
+# -- Requires: none
+# 
+#==============================================================================
+
+$imported = {} if $imported.nil?
+$imported["YSA-AntiLagEvent"] = true
+
+#==============================================================================
+# Å• Updates
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2012.01.07 - Started and Finished script.
+# 
+#==============================================================================
+# Å• Instructions
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# To install this script, open up your script editor and copy/paste this script
+# to an open slot below Å• Materials/ëfçﬁ but above Å• Main. Remember to save.
+# 
+# -----------------------------------------------------------------------------
+# Event's Name.
+# -----------------------------------------------------------------------------
+#  Name:                      Effect:
+#  ALWAYS_UPDATE_NAME    -    This event always be updated, although it's out of screen.
+#  NEVER_UPDATE_NAME     -    This event never be updated.
+#
+#==============================================================================
+# Å• Compatibility
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script is made strictly for RPG Maker VX Ace. It is highly unlikely that
+# it will run with RPG Maker VX without adjusting.
+# 
+#==============================================================================
+
+module YSA
+  module ANTI_LAG
+    ALWAYS_UPDATE_NAME = "UPDATE_A" # Use for special event, which always need update sprite.
+    NEVER_UPDATE_NAME = "UPDATE_N" # Use for decorate event.
+    
+    UPDATE_OUT_OF_SCREEN = false # If set this to true, all event on the map will be updated, except with NEVER_UPDATE_NAME
+    TILE_BUFFER = 1 # The smaller, the better. 1 or 2 is the best.
+  end
+end
+
+#==============================================================================
+# Å• Editting anything past this point may potentially result in causing
+# computer damage, incontinence, explosion of user's head, coma, death, and/or
+# halitosis so edit at your own risk.
+#==============================================================================
+
+#==============================================================================
+# Å° Game_Character
+#==============================================================================
+
+class Game_Character < Game_CharacterBase
+  
+  #--------------------------------------------------------------------------
+  # new method: event?
+  #--------------------------------------------------------------------------
+  def event?
+    return false
+  end
+  
+end # Game_Character
+
+#==============================================================================
+# Å° Game_Event
+#==============================================================================
+
+class Game_Event < Game_Character
+  
+  #--------------------------------------------------------------------------
+  # new method: event?
+  #--------------------------------------------------------------------------
+  def event?
+    return true
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: event
+  #--------------------------------------------------------------------------
+  def event
+    return @event
+  end
+  
+end # Game_Event
+
+#==============================================================================
+# Å° Game_Map
+#==============================================================================
+
+class Game_Map
+  
+  #--------------------------------------------------------------------------
+  # overwrite method: update_events
+  #--------------------------------------------------------------------------
+  def update_events
+    @events.each_value {|event| 
+      event.update if event.event.name != YSA::ANTI_LAG::NEVER_UPDATE_NAME
+    }
+    @common_events.each {|event| event.update }
+  end
+  
+end # Game_Map
+  
+#==============================================================================
+# Å° Sprite_Character
+#==============================================================================
+
+class Sprite_Character < Sprite_Base
+  
+  #--------------------------------------------------------------------------
+  # new method: need_update?
+  #--------------------------------------------------------------------------
+  def need_update?
+    return true if character.event? && character.event.name == YSA::ANTI_LAG::ALWAYS_UPDATE_NAME
+    if YSA::ANTI_LAG::UPDATE_OUT_OF_SCREEN == false
+      buffer_x = character.screen_x + YSA::ANTI_LAG::TILE_BUFFER * 32
+      buffer_y = character.screen_y + YSA::ANTI_LAG::TILE_BUFFER * 32
+      check = (buffer_x >= 0 && buffer_x <= (Graphics.width + YSA::ANTI_LAG::TILE_BUFFER * 32 * 4)) && (buffer_y >= 0 && buffer_y <= (Graphics.height + YSA::ANTI_LAG::TILE_BUFFER * 32 * 4))
+      return check if character.event?
+    end
+    return true
+  end
+  
+end # Sprite_Character
+
+#==============================================================================
+# Å° Spriteset_Map
+#==============================================================================
+
+class Spriteset_Map
+  
+  #--------------------------------------------------------------------------
+  # overwrite method: update_characters
+  #--------------------------------------------------------------------------
+  def update_characters
+    refresh_characters if @map_id != $game_map.map_id
+    @character_sprites.each {|sprite| 
+      if sprite.need_update?
+        sprite.update
+      else
+        sprite.visible = false
+      end
+    }
+  end
+
+end # Spriteset_Map
+
+#==============================================================================
+# 
+# Å• End of File
+# 
+#==============================================================================

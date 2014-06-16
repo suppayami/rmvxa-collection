@@ -1,0 +1,1274 @@
+﻿#==============================================================================
+# 
+# ▼ YSA Battle System: Classical ATB
+# -- Last Updated: 2012.01.30
+# -- Level: Easy, Normal
+# -- Requires: YEA - Ace Battle Engine v1.15+.
+# 
+#==============================================================================
+
+$imported = {} if $imported.nil?
+$imported["YSA-CATB"] = true
+
+#==============================================================================
+# ▼ Updates
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2012.01.30 - Fix various things with force actions.
+#            - Disable Additional Action.
+#            - Compatible with: YEA - Active Chain Skills.
+# 2012.01.27 - Compatible with: Lunatic CATB Reset.
+# 2012.01.26 - Fix a bug with status window.
+#            - Compatible with: Yanfly Engine Ace - Combat Log Display.
+#            - Fix a bug with PAUSE_WHEN_ACTIVE_PARTY_COMMAND.
+# 2012.01.25 - Fix a small bug with states updating.
+# 2012.01.20 - Compatible with: Lunatic CATB Rate.
+#            - Fix a bug with first strike.
+# 2012.01.19 - Fix a small bug with Action's Icon Updating.
+#            - Fix a critical bug with target selecting.
+#            - Fix a bug with states updating.
+#            - Fix a small bug with actor's status when choosing skill/item.
+#            - Fix a critical bug with auto battle.
+# 2012.01.16 - Fix ATB speed changes when a battler's agi changes.
+#            - Add casting time.
+# 2012.01.16 - Add a function for preemptive strike and surprised.
+#            - Fix a small bug with make action.
+# 2012.01.13 - Bugfix for ATB Type Wait.
+#            - Upgrade a little ATB gauge.
+#            - Upgrade turn count.
+#            - Compatible with: Lunatic CATB Start.
+# 2012.01.12 - Started Script and Finished.
+# 
+#==============================================================================
+# ▼ Introduction
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script will add a battle type into YEA Battle Engine Ace.
+# Battle Type: Classical ATB.
+# 
+#==============================================================================
+# ▼ Instructions
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# To install this script, open up your script editor and copy/paste this script
+# to an open slot below ▼ Materials/素材 but above ▼ Main. Remember to save.
+#
+# First, set the default battle system for your game to be :catb by either going
+# to the Ace Battle Engine script and setting DEFAULT_BATTLE_SYSTEM as :catb or
+# by using the following script call: 
+# 
+# $game_system:set_battle_system(:catb)
+#
+# Second, you can set the default wait for your game by either setting DEFAULT_WAIT
+# or using the following script call:
+#
+# $game_system:set_catb_wait_type(wait_type)
+#
+# Which there are 4 types: 
+#   - :full     : ATB always run, except when animation run
+#   - :quarter  : ATB pause when select skill/item/target
+#   - :semi     : ATB pause when select target
+#   - :wait     : ATB pause when choose action for actor
+#
+# Third, you can set the default turn counting for your game by either setting 
+# DEFAULT_TURN or using the following script call:
+#
+# $game_system:set_catb_turn_type(turn_type)
+#
+# Which there are 2 types: 
+#   - :tick     : Count as a turn after X frame
+#   - :action   : Count as a turn after X actions
+#
+# -----------------------------------------------------------------------------
+# Skill/Item Notetags - These notetags go in the skill/item notebox in the database.
+# -----------------------------------------------------------------------------
+# <charge rate: x%>
+# Enable casting time (skill charge) for Skill or Item. Skill/Item will be charged
+# at normal ATB filled speed * x%, which means it will be charged at x% rate.
+#
+#==============================================================================
+# ▼ Compatibility
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script is made strictly for RPG Maker VX Ace. It is highly unlikely that
+# it will run with RPG Maker VX without adjusting.
+# 
+# This script requires Yanfly Engine Ace - Ace Battle Engine v1.15+ and the
+# script must be placed under Ace Battle Engine in the script listing.
+# 
+#==============================================================================
+
+#==============================================================================
+# ▼ Configuration
+#==============================================================================
+
+module YSA
+  module CATB
+    
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    # - General Configuration -
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    DEFAULT_FILL_TIME = 120 # Frames
+    DEFAULT_WAIT      = :full # :full, :semi, :quarter, :wait
+    FILL_TIME_VARIABLE  = 15 # Change DEFAULT_FILL_TIME by variable.
+    
+    PAUSE_WHEN_ACTIVE_PARTY_COMMAND = false
+    
+    PREEMTIVE_ATB_ACTOR = 70
+    PREEMTIVE_ATB_ENEMY = 0
+    SURPRISE_ATB_ACTOR = 0
+    SURPRISE_ATB_ENEMY = 70
+    
+    FORCE_ACTION_CLEAR_ATB = false
+    
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    # - Turn Configuration -
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    DEFAULT_TURN          = :action # :tick, :action
+    
+    TICK_COUNT            = 150    # Turn after TICK_COUNT
+    TICK_COUNT_VARIABLE   = 16     # Change TICK_COUNT by variable.
+    
+    AFTER_ACTION          = 1      # Turn after AFTER_ACTION actions.
+    AFTER_ACTION_VARIABLE  = 17     # Change AFTER_ACTION by variable.
+    FORCE_ACTION_COUNT = false # Count force action as a turn action?
+    
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    # - Actor ATB Gauges -
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    GAUGE_COLOR1 = 32
+    GAUGE_COLOR2 = 31
+    CHARGE_COLOR1 = 18
+    CHARGE_COLOR2 = 10
+    ATB_GAUGE_Y_PLUS = 12
+    ATB_PHRASE = "ATB"
+    
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    # - Enemy ATB Gauges -
+    #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    SHOW_ENEMY_ATB_GAUGE    = true  # Display Enemy HP Gauge?
+    ENEMY_GAUGE_WIDTH      = 128    # How wide the enemy gauges are.
+    ENEMY_GAUGE_HEIGHT     = 12     # How tall the enemy gauges are.
+    ENEMY_ATB_GAUGE_COLOUR1 = 1     # Colour 1 for ATB.
+    ENEMY_ATB_GAUGE_COLOUR2 = 4     # Colour 2 for ATB.
+    ENEMY_BACKGAUGE_COLOUR = 19     # Gauge Back colour.
+    
+  end
+end
+
+#==============================================================================
+# ▼ Editting anything past this point may potentially result in causing
+# computer damage, incontinence, explosion of user's head, coma, death, and/or
+# halitosis so edit at your own risk.
+#==============================================================================
+
+module YSA
+  module REGEXP
+  module USABLEITEM
+    
+    CHARGE_RATE = /<(?:CHARGE_RATE|charge rate):[ ](\d+)?([%％])>/i
+    
+  end # USABLEITEM
+  end # REGEXP
+end # YSA
+
+#==============================================================================
+# ■ DataManager
+#==============================================================================
+
+module DataManager
+  
+  #--------------------------------------------------------------------------
+  # alias method: load_database
+  #--------------------------------------------------------------------------
+  class <<self; alias load_database_catb load_database; end
+  def self.load_database
+    load_database_catb
+    load_notetags_catb
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: load_notetags_catb
+  #--------------------------------------------------------------------------
+  def self.load_notetags_catb
+    groups = [$data_skills, $data_items]
+    for group in groups
+      for obj in group
+        next if obj.nil?
+        obj.load_notetags_catb
+      end
+    end
+  end
+  
+end # DataManager
+
+#==============================================================================
+# ■ RPG::UsableItem
+#==============================================================================
+
+class RPG::UsableItem < RPG::BaseItem
+
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_accessor :charge_rate
+  attr_accessor :charge_on
+  
+  #--------------------------------------------------------------------------
+  # common cache: load_notetags_catb
+  #--------------------------------------------------------------------------
+  def load_notetags_catb
+    @charge_rate = 100
+    @charge_on = false
+    #---
+    self.note.split(/[\r\n]+/).each { |line|
+      case line
+      #---
+      when YSA::REGEXP::USABLEITEM::CHARGE_RATE
+        @charge_on = true
+        @charge_rate = $1.to_i
+      #---
+      end
+    } # self.note.split
+    #---
+    @charge_rate = 100 if @charge_rate <= 0
+  end
+  
+end # RPG::UsableItem
+
+#==============================================================================
+# ■ BattleManager
+#==============================================================================
+
+module BattleManager
+  
+  #--------------------------------------------------------------------------
+  # alias method:
+  #     - make_action_orders
+  #     - prior_command
+  #     - next_command
+  #     - in_turn?
+  #     - battle_start
+  #--------------------------------------------------------------------------
+  class <<self
+    alias catb_make_action_orders make_action_orders
+    alias catb_prior_command prior_command
+    alias catb_next_command next_command
+    alias catb_in_turn? in_turn?
+    alias catb_battle_start battle_start
+  end
+  
+  #--------------------------------------------------------------------------
+  # battle_start
+  #--------------------------------------------------------------------------
+  def self.battle_start
+    catb_battle_start
+    if btype?(:catb)
+      @average_agi = 0
+      make_catb_action_orders 
+      battler_hash = $game_party.members + $game_troop.members
+      battler_hash.each { |a|
+        if @preemptive
+          a.make_first_catb_value(1)
+        elsif @surprise
+          a.make_first_catb_value(2)
+        else
+          a.make_first_catb_value(0)
+        end
+        @average_agi += a.agi
+      }
+      @average_agi /= battler_hash.size
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # make_action_orders
+  #--------------------------------------------------------------------------
+  def self.make_action_orders
+    return if btype?(:catb)
+    catb_make_action_orders unless btype?(:catb)
+  end
+  
+  #--------------------------------------------------------------------------
+  # next_command
+  #--------------------------------------------------------------------------
+  def self.next_command
+    return false if btype?(:catb)
+    catb_next_command
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: in_turn?
+  #--------------------------------------------------------------------------
+  def self.in_turn?
+    return true if btype?(:catb)
+    return catb_in_turn?
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: make_catb_action_orders
+  #--------------------------------------------------------------------------
+  class <<self
+  def make_catb_action_orders
+    @action_actors = []
+    @action_enemies = []
+    @action_battlers = []
+  end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: average_agi
+  #--------------------------------------------------------------------------
+  class <<self
+  def average_agi
+    return @average_agi
+  end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: set_actor
+  #--------------------------------------------------------------------------
+  class <<self
+  def set_actor(actor_index)
+    @actor_index = actor_index
+  end
+  end
+  
+  #--------------------------------------------------------------------------
+  # prior_command
+  #--------------------------------------------------------------------------
+  def self.prior_command
+    return false if btype?(:catb)
+    catb_prior_command
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: make_catb_action
+  #--------------------------------------------------------------------------
+  class <<self
+  def make_catb_action(battler)
+    make_catb_action_orders if !@action_battlers || !@action_actors || !@action_enemies
+    return false if @action_battlers.include?(battler)
+    @action_battlers.push(battler)
+    @action_actors.push(battler) if battler.actor?
+    @action_enemies.push(battler) if battler.enemy?
+    return true
+  end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: delete_catb_action
+  #--------------------------------------------------------------------------
+  class <<self
+  def delete_catb_action(battler)
+    return false if !battler
+    @action_battlers.delete(battler)
+    @action_battlers = @action_battlers.compact
+    @action_actors.delete(battler) if battler.actor?
+    @action_actors = @action_actors.compact
+    @action_enemies.delete(battler) if battler.enemy?
+    @action_enemies = @action_enemies.compact
+    return true
+  end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: action_list
+  #--------------------------------------------------------------------------
+  class <<self
+  def action_list(type = :all)
+    return @action_battlers if type == :all
+    return @action_actors if type == :actor
+    return @action_enemies if type = :enemy
+  end
+  end
+  
+end # BattleManager
+
+#==============================================================================
+# ■ Game_System
+#==============================================================================
+
+class Game_System
+  
+  #--------------------------------------------------------------------------
+  # alias method: set_battle_system
+  #--------------------------------------------------------------------------
+  alias qatb_set_battle_system set_battle_system
+  def set_battle_system(type)
+    case type
+    when :catb; @battle_system = :catb
+    else;       qatb_set_battle_system(type)
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: battle_system_corrected
+  #--------------------------------------------------------------------------
+  alias qatb_battle_system_corrected battle_system_corrected
+  def battle_system_corrected(type)
+    case type
+    when :catb; return :catb
+    else;       return qatb_battle_system_corrected(type)
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: catb_fill_time
+  #--------------------------------------------------------------------------
+  def catb_fill_time
+    return $game_variables[YSA::CATB::FILL_TIME_VARIABLE] > 0 ? $game_variables[YSA::CATB::FILL_TIME_VARIABLE] : YSA::CATB::DEFAULT_FILL_TIME
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: catb_tick_count
+  #--------------------------------------------------------------------------
+  def catb_tick_count
+    return $game_variables[YSA::CATB::TICK_COUNT_VARIABLE] > 0 ? $game_variables[YSA::CATB::TICK_COUNT_VARIABLE] : YSA::CATB::TICK_COUNT
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: catb_after_action
+  #--------------------------------------------------------------------------
+  def catb_after_action
+    return $game_variables[YSA::CATB::AFTER_ACTION_VARIABLE] > 0 ? $game_variables[YSA::CATB::AFTER_ACTION_VARIABLE] : YSA::CATB::AFTER_ACTION
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: catb_turn_type
+  #--------------------------------------------------------------------------
+  def catb_turn_type
+    return @catb_turn_type ? @catb_turn_type : YSA::CATB::DEFAULT_TURN
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: catb_wait_type
+  #--------------------------------------------------------------------------
+  def catb_wait_type
+    return @catb_wait_type ? @catb_wait_type : YSA::CATB::DEFAULT_WAIT
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: set_catb_wait_type
+  #--------------------------------------------------------------------------
+  def set_catb_wait_type(type = :full)
+    @catb_wait_type = type
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: set_catb_turn_type
+  #--------------------------------------------------------------------------
+  def set_catb_turn_type(type = :tick)
+    @catb_turn_type = type
+  end
+  
+end # Game_System
+
+#==============================================================================
+# ■ Game_Battler
+#==============================================================================
+
+class Game_Battler < Game_BattlerBase
+  
+  MAX_CATB_VALUE = 100000.0
+  
+  #--------------------------------------------------------------------------
+  # alias method: initialize
+  #--------------------------------------------------------------------------
+  alias catb_initialize initialize
+  def initialize
+    catb_initialize
+    @catb_value = 0
+    @ct_catb_value = 0
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: base_gain_catb
+  #--------------------------------------------------------------------------
+  def base_gain_catb
+    return MAX_CATB_VALUE / $game_system.catb_fill_time
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: real_gain_catb
+  #--------------------------------------------------------------------------
+  def real_gain_catb
+    value = (self.agi.to_f / BattleManager.average_agi) * base_gain_catb
+    return value
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: make_catb_update
+  #--------------------------------------------------------------------------
+  def make_catb_update
+    return if @catb_value >= MAX_CATB_VALUE
+    return if not movable?
+    value = $imported["YSA-LunaticCATBRate"] ? lunatic_catb_rate_formula : real_gain_catb
+    @catb_value += [value, MAX_CATB_VALUE - @catb_value].min
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: make_catb_action
+  #--------------------------------------------------------------------------
+  def make_catb_action
+    return unless @catb_value >= MAX_CATB_VALUE
+    return clear_catb if not movable?
+    return BattleManager.make_catb_action(self)
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: make_ct_catb_update
+  #--------------------------------------------------------------------------
+  def make_ct_catb_update
+    return if @catb_value < MAX_CATB_VALUE
+    return if @ct_catb_value >= MAX_CATB_VALUE
+    return if !self.current_action
+    return if !self.current_action.item
+    return if self.actor? && !self.current_action.confirm
+    clear_catb if not movable?
+    @ct_catb_value = MAX_CATB_VALUE if !self.current_action.item.charge_on
+    value = $imported["YSA-LunaticCATBRate"] ? lunatic_catb_rate_formula : real_gain_catb
+    @ct_catb_value += [value * self.current_action.item.charge_rate / 100, MAX_CATB_VALUE - @ct_catb_value].min
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: charge_skill_done?
+  #--------------------------------------------------------------------------
+  def charge_skill_done?
+    return @catb_value >= MAX_CATB_VALUE && @ct_catb_value >= MAX_CATB_VALUE
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: clear_catb
+  #--------------------------------------------------------------------------
+  def clear_catb(value = 0)
+    @catb_value = value
+    @ct_catb_value = 0
+    BattleManager.clear_actor if self.actor? && BattleManager.actor == self
+    BattleManager.delete_catb_action(self)
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: clear_catb_charge
+  #--------------------------------------------------------------------------
+  def clear_catb_charge
+    @ct_catb_value = 0
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: make_first_catb_value
+  #--------------------------------------------------------------------------
+  def make_first_catb_value(pre = 0)
+    make_actions
+    @catb_value = 0
+    @catb_value = YSA::CATB::PREEMTIVE_ATB_ACTOR if self.actor? && pre == 1
+    @catb_value = YSA::CATB::PREEMTIVE_ATB_ENEMY if self.enemy? && pre == 1
+    @catb_value = YSA::CATB::SURPRISE_ATB_ACTOR if self.actor? && pre == 2
+    @catb_value = YSA::CATB::SURPRISE_ATB_ENEMY if self.enemy? && pre == 2
+    lunatic_catb_start_formula(pre) if $imported["YSA-LunaticCATBStart"]
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: catb_filled_rate
+  #--------------------------------------------------------------------------
+  def catb_filled_rate
+    return @catb_value / MAX_CATB_VALUE
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: catb_ct_filled_rate
+  #--------------------------------------------------------------------------
+  def catb_ct_filled_rate
+    return @catb_value < MAX_CATB_VALUE ? 0 : @ct_catb_value / MAX_CATB_VALUE
+  end
+  
+  #--------------------------------------------------------------------------
+  # overwrite method: update_state_turns
+  #--------------------------------------------------------------------------
+  def update_state_turns
+    states.each do |state|
+      @state_turns[state.id] -= 1 if @state_turns[state.id] > 0 && state.auto_removal_timing == 2
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: update_state_actions
+  #--------------------------------------------------------------------------
+  def update_state_actions
+    states.each do |state|
+      @state_turns[state.id] -= 1 if @state_turns[state.id] > 0 && state.auto_removal_timing == 1
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: on_action_end
+  #--------------------------------------------------------------------------
+  alias catb_on_action_end on_action_end
+  def on_action_end
+    catb_on_action_end
+    update_state_actions
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: on_restrict
+  #--------------------------------------------------------------------------
+  alias catb_on_restrict on_restrict
+  def on_restrict
+    if BattleManager.btype?(:catb)
+      clear_catb(0)
+      states.each do |state|
+        remove_state(state.id) if state.remove_by_restriction
+      end
+    end
+    catb_on_restrict unless BattleManager.btype?(:catb)
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: force_action
+  #--------------------------------------------------------------------------
+  alias catb_force_action force_action
+  def force_action(skill_id, target_index)
+    if BattleManager.btype?(:catb)
+      action = Game_Action.new(self, true)
+      action.set_skill(skill_id)
+      if target_index == -2
+        action.target_index = last_target_index
+      elsif target_index == -1
+        action.decide_random_target
+      else
+        action.target_index = target_index
+      end
+      @actions = [action] + @actions
+    end
+    catb_force_action(skill_id, target_index) unless BattleManager.btype?(:catb)
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: make_action_times
+  #--------------------------------------------------------------------------
+  alias catb_make_action_times make_action_times
+  def make_action_times
+    BattleManager.btype?(:catb) ? 1 : catb_make_action_times
+  end
+
+  
+end # Game_Battler
+
+#==============================================================================
+# ■ Game_Action
+#==============================================================================
+
+class Game_Action
+    
+  #--------------------------------------------------------------------------
+  # alias method: clear
+  #--------------------------------------------------------------------------
+  alias catb_clear clear
+  def clear
+    catb_clear
+    @confirm = false
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: confirm=
+  #--------------------------------------------------------------------------
+  def confirm=(con)
+    @confirm = con
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: confirm
+  #--------------------------------------------------------------------------
+  def confirm
+    return @subject.auto_battle? ? true : @confirm
+  end
+
+end # Game_Action
+
+#==============================================================================
+# ■ Window_Base
+#==============================================================================
+
+class Window_Base < Window
+  #--------------------------------------------------------------------------
+  # catb_gauge_color
+  #--------------------------------------------------------------------------
+  def catb_color1;      text_color(YSA::CATB::GAUGE_COLOR1);      end;
+  def catb_color2;      text_color(YSA::CATB::GAUGE_COLOR2);      end;
+  def charge_color1;      text_color(YSA::CATB::CHARGE_COLOR1);      end;
+  def charge_color2;      text_color(YSA::CATB::CHARGE_COLOR2);      end;
+end # Window_Base
+
+#==============================================================================
+# ■ Window_BattleStatus
+#==============================================================================
+
+class Window_BattleStatus < Window_Selectable
+  
+  #--------------------------------------------------------------------------
+  # alias method: draw_item
+  #--------------------------------------------------------------------------
+  alias catb_draw_item draw_item
+  def draw_item(index)
+    catb_draw_item(index)
+    actor = battle_members[index]
+    rect = item_rect(index)
+    gx = YEA::BATTLE::BATTLESTATUS_HPGAUGE_Y_PLUS + YSA::CATB::ATB_GAUGE_Y_PLUS
+    return unless BattleManager.btype?(:catb)
+    draw_actor_catb(actor, rect.x+2, line_height*1+gx, rect.width-4)
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: draw_actor_catb
+  #--------------------------------------------------------------------------
+  def draw_actor_catb(actor, dx, dy, width = 124)
+    draw_gauge(dx, dy, width, actor.catb_filled_rate, catb_color1, catb_color2)
+    if actor.catb_ct_filled_rate > 0
+      draw_gauge(dx, dy, width, actor.catb_ct_filled_rate, charge_color1, charge_color2)
+    end
+    change_color(system_color)
+    cy = (Font.default_size - contents.font.size) / 2 + 1
+    draw_text(dx+2, dy+cy, 30, line_height, YSA::CATB::ATB_PHRASE)
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: draw_item_actor_catb
+  #--------------------------------------------------------------------------
+  def draw_item_actor_catb(index)
+    return if index.nil?
+    actor = battle_members[index]
+    rect = item_rect(index)
+    return if actor.nil?
+    gx = YEA::BATTLE::BATTLESTATUS_HPGAUGE_Y_PLUS + YSA::CATB::ATB_GAUGE_Y_PLUS
+    draw_actor_catb(actor, rect.x+2, line_height*1+gx, rect.width-4)
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: refresh_catb
+  #--------------------------------------------------------------------------
+  def refresh_catb
+    return unless BattleManager.btype?(:catb)
+    item_max.times {|i| draw_item_actor_catb(i) }
+  end
+  
+end # Window_BattleStatus
+
+#==============================================================================
+# ■ Sprite_Battler
+#==============================================================================
+
+class Sprite_Battler < Sprite_Base
+  
+  #--------------------------------------------------------------------------
+  # alias method: initialize
+  #--------------------------------------------------------------------------
+  alias sprite_battler_initialize_catb initialize
+  def initialize(viewport, battler = nil)
+    sprite_battler_initialize_catb(viewport, battler)
+    create_enemy_gauges_catb
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: dispose
+  #--------------------------------------------------------------------------
+  alias sprite_battler_dispose_catb dispose
+  def dispose
+    sprite_battler_dispose_catb
+    dispose_enemy_gauges_catb
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: update
+  #--------------------------------------------------------------------------
+  alias sprite_battler_update_catb update
+  def update
+    sprite_battler_update_catb
+    update_enemy_gauges_catb
+  end
+
+  #--------------------------------------------------------------------------
+  # new method: create_enemy_gauges_catb
+  #--------------------------------------------------------------------------
+  def create_enemy_gauges_catb
+    return if @battler.nil?
+    return if @battler.actor?
+    return unless BattleManager.btype?(:catb)
+    @catb_back_gauge_viewport = Enemy_CATB_Gauge_Viewport.new(@battler, self, :back)
+    @catb_gauge_viewport = Enemy_CATB_Gauge_Viewport.new(@battler, self, :catb)
+    @catb_ct_gauge_viewport = Enemy_CATB_Gauge_Viewport.new(@battler, self, :catbct)
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: dispose_enemy_gauges_catb
+  #--------------------------------------------------------------------------
+  def dispose_enemy_gauges_catb
+    return unless BattleManager.btype?(:catb)
+    @catb_back_gauge_viewport.dispose unless @catb_back_gauge_viewport.nil?
+    @catb_gauge_viewport.dispose unless @catb_gauge_viewport.nil?
+    @catb_ct_gauge_viewport.dispose unless @catb_ct_gauge_viewport.nil?
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: update_enemy_gauges_catb
+  #--------------------------------------------------------------------------
+  def update_enemy_gauges_catb
+    return unless BattleManager.btype?(:catb)
+    @catb_back_gauge_viewport.update unless @catb_back_gauge_viewport.nil?
+    @catb_gauge_viewport.update unless @catb_gauge_viewport.nil?
+    @catb_ct_gauge_viewport.update unless @catb_ct_gauge_viewport.nil?
+  end
+  
+end # Sprite_Battler
+
+#==============================================================================
+# ■ Enemy_CATB_Gauge_Viewport
+#==============================================================================
+
+class Enemy_CATB_Gauge_Viewport < Viewport
+  
+  #--------------------------------------------------------------------------
+  # initialize
+  #--------------------------------------------------------------------------
+  def initialize(battler, sprite, type)
+    @battler = battler
+    @base_sprite = sprite
+    @type = type
+    dw = YSA::CATB::ENEMY_GAUGE_WIDTH
+    dw += 2 if @type == :back
+    @start_width = dw
+    dh = YSA::CATB::ENEMY_GAUGE_HEIGHT
+    dh += 2 if @type == :back
+    rect = Rect.new(0, 0, dw, dh)
+    super(rect)
+    self.z = 125
+    create_gauge_sprites
+    self.visible = false
+    update_position
+  end
+  
+  #--------------------------------------------------------------------------
+  # dispose
+  #--------------------------------------------------------------------------
+  def dispose
+    @sprite.bitmap.dispose unless @sprite.bitmap.nil?
+    @sprite.dispose
+    super
+  end
+  
+  #--------------------------------------------------------------------------
+  # update
+  #--------------------------------------------------------------------------
+  def update
+    super
+    self.visible = @battler.dead? ? false : @battler.hidden? ? false : YSA::CATB::SHOW_ENEMY_ATB_GAUGE
+    update_position
+    update_gauge
+  end
+  
+  #--------------------------------------------------------------------------
+  # create_gauge_sprites
+  #--------------------------------------------------------------------------
+  def create_gauge_sprites
+    @sprite = Plane.new(self)
+    dw = self.rect.width * 2
+    @sprite.bitmap = Bitmap.new(dw, self.rect.height)
+    case @type
+    when :back
+      colour1 = Colour.text_colour(YSA::CATB::ENEMY_BACKGAUGE_COLOUR)
+      colour2 = Colour.text_colour(YSA::CATB::ENEMY_BACKGAUGE_COLOUR)
+    when :catb
+      colour1 = Colour.text_colour(YSA::CATB::ENEMY_ATB_GAUGE_COLOUR1)
+      colour2 = Colour.text_colour(YSA::CATB::ENEMY_ATB_GAUGE_COLOUR2)
+    when :catbct
+      colour1 = Colour.text_colour(YSA::CATB::CHARGE_COLOR1)
+      colour2 = Colour.text_colour(YSA::CATB::CHARGE_COLOR2)
+    end
+    dx = 0
+    dy = 0
+    dw = self.rect.width
+    dh = self.rect.height
+    self.rect.width = target_gauge_width unless @type == :back
+    @gauge_width = target_gauge_width
+    @sprite.bitmap.gradient_fill_rect(dx, dy, dw, dh, colour1, colour2)
+    @sprite.bitmap.gradient_fill_rect(dw, dy, dw, dh, colour2, colour1)
+  end
+
+  #--------------------------------------------------------------------------
+  # update_position
+  #--------------------------------------------------------------------------
+  def update_position
+    dx = @battler.screen_x - @start_width / 2
+    self.rect.x = dx
+    dh = self.rect.height + 1
+    dh += 2 unless @type == :back
+    dy = [@battler.screen_y, Graphics.height - dh - 120].min
+    dy += 1 unless @type == :back
+    dy -= YEA::BATTLE::ENEMY_GAUGE_HEIGHT if $imported["YEA-EnemyHPBars"]
+    self.rect.y = dy
+  end
+  
+  #--------------------------------------------------------------------------
+  # update_gauge
+  #--------------------------------------------------------------------------
+  def update_gauge
+    return if @gauge_width == target_gauge_width
+    @gauge_width = target_gauge_width if @type == :catb
+    @gauge_width = target_gauge_width_ct if @type == :catbct
+    return if @type == :back
+    self.rect.width = @gauge_width
+  end
+  
+  #--------------------------------------------------------------------------
+  # target_gauge_width
+  #--------------------------------------------------------------------------
+  def target_gauge_width
+    return @battler.catb_filled_rate * @start_width
+  end
+  
+  #--------------------------------------------------------------------------
+  # target_gauge_width_ct
+  #--------------------------------------------------------------------------
+  def target_gauge_width_ct
+    return @battler.catb_ct_filled_rate * @start_width
+  end
+  
+end # Enemy_CATB_Gauge_Viewport
+  
+#==============================================================================
+# ■ Window_BattleEnemy
+#==============================================================================
+
+class Window_BattleEnemy < Window_Selectable
+  
+  #--------------------------------------------------------------------------
+  # alias method: col_max
+  #--------------------------------------------------------------------------
+  alias catb_col_max col_max
+  def col_max; return catb_col_max == 0 ? 1 : catb_col_max; end
+
+end # Window_BattleEnemy
+
+#==============================================================================
+# ■ Scene_Battle
+#==============================================================================
+
+class Scene_Battle < Scene_Base
+  
+  #--------------------------------------------------------------------------
+  # alias method: process_action
+  #--------------------------------------------------------------------------
+  alias catb_process_action process_action
+  def process_action
+    if BattleManager.btype?(:catb)
+      process_catb 
+      perform_catb_action(@subject, true) if BattleManager.action_forced?
+    end
+    catb_process_action unless BattleManager.btype?(:catb)
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: catb_pause?
+  #--------------------------------------------------------------------------
+  def catb_pause?
+    return true if BattleManager.action_forced?
+    return YSA::CATB::PAUSE_WHEN_ACTIVE_PARTY_COMMAND if @party_command_window.active
+    return true if $imported["YEA-CombatLogDisplay"] && @combatlog_window && @combatlog_window.visible
+    return false if $game_system.catb_wait_type == :full
+    return true if $game_system.catb_wait_type == :wait && (@actor_command_window.active || @skill_window.active || @item_window.active || @actor_window.active || @enemy_window.active)
+    return true if $game_system.catb_wait_type == :quarter && (@skill_window.active || @item_window.active || @actor_window.active || @enemy_window.active)
+    return true if $game_system.catb_wait_type == :semi && (@actor_window.active || @enemy_window.active)
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: process_catb
+  #--------------------------------------------------------------------------
+  def process_catb
+    if @status_window.index >= 0 && ($game_party.members[@status_window.index].dead? || !BattleManager.action_list(:actor).include?($game_party.members[@status_window.index]))
+      $game_party.members[@status_window.index].clear_catb
+      if @skill_window.visible || @item_window.visible
+        @status_window.open
+        @status_window.show
+        @status_aid_window.hide
+      end
+      @actor_window.hide.deactivate
+      @enemy_window.hide.deactivate
+      @actor_command_window.deactivate
+      @actor_command_window.close
+      @skill_window.hide.deactivate
+      @item_window.hide.deactivate
+      @status_window.unselect
+    end
+    return unless SceneManager.scene_is?(Scene_Battle)
+    return if scene_changing?
+    return unless BattleManager.btype?(:catb)
+    return if catb_pause?
+    battler_hash = $game_party.members + $game_troop.members
+    battler_hash.each { |a|
+      a.make_catb_update
+      a.make_catb_action
+      a.make_ct_catb_update
+    }
+    #--- Update Tick Turn
+    if $game_system.catb_turn_type == :tick
+      @tick_clock = 0 if !@tick_clock
+      @tick_clock += 1
+      if @tick_clock >= $game_system.catb_tick_count
+        @tick_clock = 0
+        all_battle_members.each { |battler|
+          battler.on_turn_end
+        }
+        @status_window.refresh
+        $game_troop.increase_turn
+      end
+    end
+    #--- Fix make action
+    BattleManager.action_list(:actor).each { |battler|
+      battler.make_actions if (battler.actor? && !battler.input)
+    }
+    #---
+    @status_window.refresh_catb
+    #--- Setup Actor
+    @f_actor_index = 0 if !@f_actor_index || @f_actor_index < 0 || @f_actor_index + 1 > BattleManager.action_list(:actor).size
+    f_actor = BattleManager.action_list(:actor)[@f_actor_index]
+    @f_actor_index += 1 if (@f_actor_index + 1) < BattleManager.action_list(:actor).size && f_actor && f_actor.input && f_actor.input.item && f_actor.input.confirm
+    f_actor = BattleManager.action_list(:actor)[@f_actor_index]
+    if f_actor && f_actor.input && !f_actor.input.confirm && (!BattleManager.actor || @status_window.index != BattleManager.actor.index) && !@actor_command_window.active && !@party_command_window.active
+      BattleManager.set_actor(f_actor.index)
+      @status_window.select(BattleManager.actor.index)
+      @actor_command_window.setup(BattleManager.actor)
+      @actor_command_window.show
+    end
+    BattleManager.action_list.each { |battler|
+      battler.make_actions if battler.enemy?
+      perform_catb_action(battler) if !@subject
+    }
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: perform_catb_action
+  #--------------------------------------------------------------------------
+  def perform_catb_action(subject, forced = false)
+    return if subject && !subject.charge_skill_done? && !forced
+    return if subject && subject.actor? && !forced && !subject.input
+    return if subject && subject.actor? && !forced && !subject.input.item
+    return if subject && subject.actor? && !forced && !subject.input.confirm
+    @subject = subject if subject
+    return if !@subject
+    if @subject.current_action
+      @subject.current_action.prepare
+      execute_action if @subject.current_action.valid?
+      reset_value = $imported["YSA-LunaticCATBReset"] ? @subject.lunatic_catb_reset_formula : 0
+      process_event
+      loop do
+        @subject.remove_current_action
+        break if forced || !@subject.current_action || !@subject.current_action.valid?
+        @subject.current_action.prepare
+        execute_action
+      end
+      if $game_system.catb_turn_type == :action
+        @tick_action = 0 if !@tick_action
+        @tick_action += 1 if !forced || (forced && YSA::CATB::FORCE_ACTION_COUNT)
+        if @tick_action >= $game_system.catb_after_action
+          @tick_action = 0
+          all_battle_members.each { |battler|
+            battler.on_turn_end
+          }
+          @status_window.refresh
+          $game_troop.increase_turn
+        end
+      end
+      @status_aid_window.refresh if @status_aid_window.visible
+      process_action_end
+    end
+    return if BattleManager.judge_win_loss
+    if @subject
+      @subject.clear_catb(reset_value) if (YSA::CATB::FORCE_ACTION_CLEAR_ATB && forced) || !forced
+      @status_window.draw_item(@subject.index) if @subject.actor?
+      @subject = nil
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: create_actor_command_window
+  #--------------------------------------------------------------------------
+  alias catb_create_actor_command_window create_actor_command_window
+  def create_actor_command_window
+    catb_create_actor_command_window
+    if BattleManager.btype?(:catb)
+      @actor_command_window.set_handler(:dir4, method(:prior_f_actor))
+      @actor_command_window.set_handler(:dir6, method(:next_f_actor))
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: prior_f_actor
+  #--------------------------------------------------------------------------
+  def prior_f_actor
+    if @f_actor_index && BattleManager.action_list(:actor).size > 0
+      @f_actor_index -= 1
+      @f_actor_index = 0 if @f_actor_index < 0
+      f_actor = BattleManager.action_list(:actor)[@f_actor_index]
+      if f_actor
+        BattleManager.set_actor(f_actor.index)
+        @status_window.select(BattleManager.actor.index)
+        @actor_command_window.setup(BattleManager.actor)
+      end
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: next_f_actor
+  #--------------------------------------------------------------------------
+  def next_f_actor
+    if @f_actor_index && BattleManager.action_list(:actor).size > 0
+      @f_actor_index += 1
+      @f_actor_index = 0 if (@f_actor_index + 1) > BattleManager.action_list(:actor).size
+      f_actor = BattleManager.action_list(:actor)[@f_actor_index]
+      if f_actor
+        BattleManager.set_actor(f_actor.index)
+        @status_window.select(BattleManager.actor.index)
+        @actor_command_window.setup(BattleManager.actor)
+      end
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: turn_start
+  #--------------------------------------------------------------------------
+  alias catb_turn_start turn_start
+  def turn_start
+    if BattleManager.btype?(:catb)
+      @party_command_window.close
+      @actor_command_window.close
+      @status_window.unselect
+      @log_window.wait
+      @log_window.clear
+    else
+      catb_turn_start
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: command_guard
+  #--------------------------------------------------------------------------
+  alias catb_command_guard command_guard
+  def command_guard
+    BattleManager.actor.input.confirm = true
+    catb_command_guard
+    @status_window.draw_item(BattleManager.actor.index)
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: command_attack
+  #--------------------------------------------------------------------------
+  alias catb_command_attack command_attack
+  def command_attack
+    catb_command_attack
+    @status_window.draw_item(BattleManager.actor.index)
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: on_enemy_ok
+  #--------------------------------------------------------------------------
+  alias catb_on_enemy_ok on_enemy_ok
+  def on_enemy_ok
+    BattleManager.actor.input.confirm = true
+    catb_on_enemy_ok
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: on_enemy_cancel
+  #--------------------------------------------------------------------------
+  alias catb_on_enemy_cancel on_enemy_cancel
+  def on_enemy_cancel
+    BattleManager.actor.input.confirm = false
+    catb_on_enemy_cancel
+    @status_window.draw_item(BattleManager.actor.index)
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: on_actor_ok
+  #--------------------------------------------------------------------------
+  alias catb_on_actor_ok on_actor_ok
+  def on_actor_ok
+    BattleManager.actor.input.confirm = true
+    catb_on_actor_ok
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: on_actor_cancel
+  #--------------------------------------------------------------------------
+  alias catb_on_actor_cancel on_actor_cancel
+  def on_actor_cancel
+    BattleManager.actor.input.confirm = false
+    catb_on_actor_cancel
+    @status_window.draw_item(BattleManager.actor.index)
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: on_skill_ok
+  #--------------------------------------------------------------------------
+  alias catb_on_skill_ok on_skill_ok
+  def on_skill_ok
+    catb_on_skill_ok
+    @status_window.draw_item(BattleManager.actor.index)
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: on_item_ok
+  #--------------------------------------------------------------------------
+  alias catb_on_item_ok on_item_ok
+  def on_item_ok
+    catb_on_item_ok
+    @status_window.draw_item(BattleManager.actor.index)
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: update_info_viewport
+  #--------------------------------------------------------------------------
+  alias catb_update_info_viewport update_info_viewport
+  def update_info_viewport
+    catb_update_info_viewport
+    if BattleManager.btype?(:catb)
+      move_info_viewport(128) if @actor_command_window.active || @actor_window.active || @enemy_window.active || (($game_troop.all_dead? || $game_party.all_dead?)&& @bug_fix1)
+      move_info_viewport(0)   if @party_command_window.active
+      move_info_viewport(0)   if $imported["YEA-CombatLogDisplay"] && @combatlog_window && @combatlog_window.visible
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # rewrite method: perform_collapse_check
+  #--------------------------------------------------------------------------
+  def perform_collapse_check(target)
+    return if YEA::BATTLE::MSG_ADDED_STATES
+    if $game_troop.all_dead? || $game_party.all_dead?
+      if @actor_window.active || @enemy_window.active
+        @bug_fix1 = true
+        @help_window.hide
+        @actor_window.hide.deactivate
+        @enemy_window.hide.deactivate
+      end
+      @actor_command_window.hide.deactivate
+      @party_command_window.hide.deactivate
+      @skill_window.hide.deactivate
+      @item_window.hide.deactivate
+      move_info_viewport(64)
+    end
+    target.perform_collapse_effect if target.can_collapse?
+    @log_window.wait
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: update_message_open
+  #--------------------------------------------------------------------------
+  alias catb_update_message_open update_message_open
+  def update_message_open
+    catb_update_message_open
+    if !$game_message.busy? && @status_window.close? && !$game_troop.all_dead? && !$game_party.all_dead?
+      @status_window.open
+    end
+  end
+   
+end # Scene_Battle
+
+#==============================================================================
+# 
+# ▼ End of File
+# 
+#==============================================================================

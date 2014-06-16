@@ -1,0 +1,15 @@
+class Game_Battler < Game_BattlerBase
+  def force_action(skill_id, target_index)
+      action = Game_Action.new(self, true)
+      action.set_skill(skill_id)
+      if target_index == -2
+        action.target_index = last_target_index
+      elsif target_index == -1
+        action.decide_random_target
+      else
+        action.target_index = target_index
+      end
+      @actions = [action] + @actions
+      @pctb_forced = true
+  end
+end

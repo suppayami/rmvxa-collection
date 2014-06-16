@@ -1,0 +1,171 @@
+# Manual Stats
+# This script will make actor's stats won't increase when level up like in
+# database. Their stats will be increased manually instead (config below 
+# calculation). This script can also control EXP per level.
+# This script requires a little knowledge of coding.
+# Free for all using purposes.
+# Credit Archeia Nessiah for idea and allowance.
+
+module Yami
+  module Manual_Stats
+
+    #---------------------------------------------------------------------------
+    # A special method for stats bonus calculation for each level.
+    # Return Array: [HP, MP, ATK, DEF, MAT, MDF, AGI, LUK]
+    #---------------------------------------------------------------------------
+    def self.calculate(actor_id, level)
+      case actor_id
+      # Actor ID 1
+      when 1
+        # Case level
+        case level
+        # From level 2 to 5
+        when 2..5
+          return [0,0,1,0,0,0,0,0]
+        # From level 6 to 10
+        when 6..10
+          return [0,0,0,2,0,0,0,0]
+        # After 10
+        else
+          return [1,5,0,2,2,0,0,0]
+        end
+      # Actor ID 2
+      when 2
+        # Case level
+        case level
+        # From level 2 to 5
+        when 2..5
+          return [0,0,1,0,0,0,0,0]
+        # From level 6 to 10
+        when 6..10
+          return [0,0,0,2,0,0,0,0]
+        # After 10
+        else
+          return [1,5,0,2,2,0,0,0]
+        end
+        
+      # Actor ID 3
+      when 3
+        # Case level
+        case level
+        # From level 2 to 5
+        when 2..5
+          return [0,0,1,0,0,0,0,0]
+        # From level 6 to 10
+        when 6..10
+          return [0,0,0,2,0,0,0,0]
+        # After 10
+        else
+          return [1,5,0,2,2,0,0,0]
+        end
+        
+      # Actor ID 4
+      when 4
+        # Increase param in position: n = level % 8
+        array = [0,0,0,0,0,0,0,0]
+        n = level % 8
+        array[n] += 1
+        return array
+        
+      # Fix nil error
+      else
+        return [0,0,0,0,0,0,0,0]
+      # End.
+      end
+    end
+    
+    #---------------------------------------------------------------------------
+    # A special method for next LV EXP calculation.
+    # Return Integer
+    #---------------------------------------------------------------------------
+    def self.exp(actor_id, level)
+      # Fix first level
+      level = level - 1
+      #---
+      case actor_id
+      # Actor ID 1
+      when 1
+        return level * 1000
+      # Actor ID 2
+      when 2
+        return 1000 * level
+      # Fix nil error
+      else
+        return 1000 * level
+      # End.
+      end
+    end
+    
+  end
+end
+
+class Game_Actor < Game_Battler
+
+  #--------------------------------------------------------------------------
+  # * Object Initialization
+  # Alias to add an array for params bonus.
+  #--------------------------------------------------------------------------
+  alias ymstats_initialize initialize
+  def initialize(actor_id)
+    @ymstats = [0,0,0,0,0,0,0,0]
+    ymstats_initialize(actor_id)
+  end
+  
+  #--------------------------------------------------------------------------
+  # * Get Base Value of Parameter
+  # Overwrote to make param cannot be increased by default.
+  # Base stats always is level 1 stats.
+  #--------------------------------------------------------------------------
+  def param_base(param_id)
+    self.class.params[param_id, 1]
+  end
+  #--------------------------------------------------------------------------
+  # * Get Added Value of Parameter
+  # Alias to add bonus params manually.
+  #--------------------------------------------------------------------------
+  alias ymstats_param_plus param_plus
+  def param_plus(param_id)
+    result = ymstats_param_plus(param_id)
+    result += @ymstats[param_id]
+    result
+  end
+  
+  #--------------------------------------------------------------------------
+  # * Level Up
+  # Alias to increase bonus params manually.
+  #--------------------------------------------------------------------------
+  alias ymstats_level_up level_up
+  def level_up
+    ymstats_level_up
+    bonus = Yami::Manual_Stats.calculate(@actor_id, @level)
+    bonus.each_index {|i| @ymstats[i] += bonus[i]}
+  end
+  
+  #--------------------------------------------------------------------------
+  # * Level Down
+  # Alias to decrease bonus params manually.
+  #--------------------------------------------------------------------------
+  alias ymstats_level_down level_down
+  def level_down
+    ymstats_level_down
+    bonus = Yami::Manual_Stats.calculate(@actor_id, @level)
+    bonus.each_index {|i| @ymstats[i] -= bonus[i]}
+  end
+  
+  #--------------------------------------------------------------------------
+  # * EXP For Level
+  # Overwrote to change EXP Curves manually.
+  #--------------------------------------------------------------------------
+  def exp_for_level(level)
+    Yami::Manual_Stats.exp(@actor_id, level)
+  end
+  
+  #--------------------------------------------------------------------------
+  # * Init EXP
+  # Overwrote to fix EXP Curves manually.
+  #--------------------------------------------------------------------------
+  def init_exp
+    @exp[@class_id] = @level == 1 ? 0 : current_level_exp
+  end
+  
+end

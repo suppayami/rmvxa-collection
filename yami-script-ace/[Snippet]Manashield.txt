@@ -1,0 +1,117 @@
+# Manashield
+# This will make a manashield state which allow actor takes damage to mana
+# instead of health points.
+# Usage: use this notetag inside a state <manashield: X, Y%>
+# X is damage absorb per mana point.
+# Y is damage percentage which can be absorbed.
+# Free for all using purposes.
+# Credit: Archeia Nessiah for the allowance.
+
+module REGEXP
+  module MANASHIELD
+    MANASHIELD = /<manashield:[ ]*(\d+),[ ]*(\d+)[%Åì]?>/i
+  end # MANASHIELD
+end # REGEXP
+
+#==============================================================================
+# Å° DataManager
+#==============================================================================
+
+module DataManager
+    
+  #--------------------------------------------------------------------------
+  # alias method: load_database
+  #--------------------------------------------------------------------------
+  class <<self; alias load_database_manashield load_database; end
+  def self.load_database
+    load_database_manashield
+    initialize_manashield
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: initialize_manashield
+  #--------------------------------------------------------------------------
+  def self.initialize_manashield
+    groups = [$data_states]
+    groups.each { |group|
+      group.each { |obj|
+        next if obj.nil?
+        obj.initialize_manashield
+      }
+    }
+  end
+  
+end # DataManager
+
+#==============================================================================
+# Å° RPG::BaseItem
+#==============================================================================
+
+class RPG::BaseItem
+  
+  #--------------------------------------------------------------------------
+  # * Public Instance Variables
+  #--------------------------------------------------------------------------
+  attr_accessor :manashield
+
+  #--------------------------------------------------------------------------
+  # new method: initialize_manashield
+  #--------------------------------------------------------------------------
+  def initialize_manashield
+    #---
+    self.note.split(/[\r\n]+/).each { |line|
+      case line
+      when REGEXP::MANASHIELD::MANASHIELD
+        @manashield = [$1.to_i, [$2.to_i, 100].min]
+      end
+    }
+  end
+  
+end # RPG::BaseItem
+
+#==============================================================================
+# Å° Game_ActionResult
+#==============================================================================
+
+class Game_ActionResult
+  
+  #--------------------------------------------------------------------------
+  # alias method: make_damage
+  #--------------------------------------------------------------------------
+  alias manashield_make_damage make_damage
+  def make_damage(value, item)
+    manashield_make_damage(value, item)
+    #---
+    if @battler.manashield && @battler.mp > 0
+      dpm = @battler.manashield[0]
+      percent = @battler.manashield[1]
+      shield = (@hp_damage * percent.to_f) / 100.0
+      shield = shield / dpm.to_f
+      shield = [shield, @battler.mp.to_f].min
+      @hp_damage -= (shield * dpm.to_f).to_i
+      @mp_damage += shield.to_i
+    end
+  end
+  
+end # Game_ActionResult
+
+#==============================================================================
+# Å° Game_Battler
+#==============================================================================
+
+class Game_Battler < Game_BattlerBase
+  
+  #--------------------------------------------------------------------------
+  # new method: manashield
+  #--------------------------------------------------------------------------
+  def manashield
+    mns = nil
+    states.each { |state|
+      next unless state.manashield
+      mns = state.manashield
+      break
+    }
+    return mns ? mns : false
+  end
+  
+end # Game_Battler

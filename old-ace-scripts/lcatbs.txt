@@ -1,0 +1,234 @@
+﻿#==============================================================================
+# 
+# ▼ YSA Battle Add-on: Lunatic CATB Start
+# -- Last Updated: 2012.01.20
+# -- Level: Easy, Normal
+# -- Requires: 
+#       - YEA - Ace Battle Engine v1.15+
+#       - YSA Battle System: Classical ATB v1.01+
+# 
+#==============================================================================
+
+$imported = {} if $imported.nil?
+$imported["YSA-LunaticCATBStart"] = true
+
+#==============================================================================
+# ▼ Updates
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2012.01.20 - Fix a mistype.
+# 2012.01.16 - Add a function for preemptive strike and surprised.
+# 2012.01.13 - Started Script and Finished.
+# 
+#==============================================================================
+# ▼ Introduction
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script decide how much ATB Gauge will be filled at start of battle.
+# 
+#==============================================================================
+# ▼ Instructions
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# To install this script, open up your script editor and copy/paste this script
+# to an open slot below ▼ Materials/素材 but above ▼ Main. Remember to save.
+# 
+#==============================================================================
+# ▼ Compatibility
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script is made strictly for RPG Maker VX Ace. It is highly unlikely that
+# it will run with RPG Maker VX without adjusting.
+# 
+# This script requires Yanfly Engine Ace - Ace Battle Engine v1.15+ and the
+# script must be placed under Ace Battle Engine in the script listing.
+# 
+#==============================================================================
+
+class Game_Battler < Game_BattlerBase
+  
+  #--------------------------------------------------------------------------
+  # ● Welcome to Lunatic Mode
+  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  # Lunatic CATB Start Formulas calculates actors/enemies Starting ATB value. 
+  # Use the following notetag to assign the formulas to be used.
+  # NOTE: You can use this with Actor, Enemy, Equipment, Class or State.
+  # 
+  #     <custom catb start: string>
+  #
+  # The formula <custom catb start: common add> will always be used, so you don't
+  # have to add this.
+  #
+  # You can use as many as you want formulas by using this notetag.
+  #
+  #     <custom catb start>
+  #      string
+  #      string
+  #     </custom catb start>
+  #
+  # All of the string information in between those two notetags will be
+  # stored the same way as the notetags shown before those. There is no
+  # difference between using either.
+  #--------------------------------------------------------------------------
+  
+  MAX_CATB_VALUE = 100000.0
+  
+  def lunatic_catb_start_formula(pre = 0)
+    @catb_value = 0
+    @preemptive = pre == 1 # Preemptive Strike
+    @surprise = pre == 2 # Surprised
+    formulas = []
+    formulas = self.actor.catb_formula + self.class.catb_formula if self.actor?
+    formulas = self.enemy.catb_formula if self.enemy?
+    if self.actor?
+      if self.equips
+        self.equips.each { |a| formulas += a.catb_formula if a } 
+      end
+      if self.skills
+        self.skills.each { |a| formulas += a.catb_formula if a }
+      end
+    end
+    self.states.each { |state| formulas += state.catb_formula }
+    for formula in formulas
+      case formula.upcase
+      
+      #----------------------------------------------------------------------
+      # ATB Starter Formula No.1: START BATTLE
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      # Set starting ATB to X percent.
+      # 
+      # Formula notetag:
+      #   <custom catb start: start battle x%>
+      #----------------------------------------------------------------------
+      when /START BATTLE[ ](\d+)([%％])/i
+        @catb_value = MAX_CATB_VALUE * $1.to_f / 100
+        
+      #----------------------------------------------------------------------
+      # ATB Starter Formula No.2: FIRST STRIKE
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      # Have X percent chance to have ATB to be full at start of battle,
+      # which mean first strike.
+      # 
+      # Formula notetag:
+      #   <custom catb start: first strike x%>
+      #----------------------------------------------------------------------
+      when /FIRST STRIKE[ ](\d+)([%％])/i
+        @catb_value = rand(100) <= ($1.to_i - 1) ? MAX_CATB_VALUE : @catb_value
+        
+      #----------------------------------------------------------------------
+      # ATB Starter Formula No.3: NONE STRIKE
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      # Have X percent chance to have ATB to be empty at start of battle.
+      # 
+      # Formula notetag:
+      #   <custom catb start: none strike x%>
+      #----------------------------------------------------------------------
+      when /NONE STRIKE[ ](\d+)([%％])/i
+        @catb_value = rand(100) <= ($1.to_i - 1) ? 0 : @catb_value
+        
+      #----------------------------------------------------------------------
+      # ATB Starter Formula Default: COMMON ADD
+      #----------------------------------------------------------------------
+      when /COMMON ADD/i
+        @catb_value += self.luk * (MAX_CATB_VALUE / 2000.0)
+        #@catb_value = 100 if @preemptive && actor?
+        #@catb_value = 100 if @surprise && enemy?
+        
+      #----------------------------------------------------------------------
+      # Stop editting past this point.
+      #----------------------------------------------------------------------
+      
+      end # End case
+    end # End for
+  end # End def
+  
+end # Game_Battler
+
+#==============================================================================
+# ▼ Editting anything past this point may potentially result in causing
+# computer damage, incontinence, explosion of user's head, coma, death, and/or
+# halitosis so edit at your own risk.
+#==============================================================================
+
+module YSA
+  module REGEXP
+  module BASEITEM
+    
+    CUSTOM_CATB_START_STR = /<(?:CUSTOM_CATB_START|custom catb start):[ ](.*)>/i
+    CUSTOM_CATB_START_ON  = /<(?:CUSTOM_CATB_START|custom catb start)>/i
+    CUSTOM_CATB_START_OFF = /<\/(?:CUSTOM_CATB_START|custom catb start)>/i
+    
+  end # BASEITEM
+  end # REGEXP
+end # YSA
+
+#==============================================================================
+# ■ DataManager
+#==============================================================================
+
+module DataManager
+  
+  #--------------------------------------------------------------------------
+  # alias method: load_database
+  #--------------------------------------------------------------------------
+  class <<self; alias load_database_lcatbst load_database; end
+  def self.load_database
+    load_database_lcatbst
+    load_notetags_lcatbst
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: load_notetags_lcatbst
+  #--------------------------------------------------------------------------
+  def self.load_notetags_lcatbst
+    groups = [$data_actors, $data_classes, $data_enemies, $data_skills, $data_weapons, $data_armors, $data_states]
+    for group in groups
+      for obj in group
+        next if obj.nil?
+        obj.load_notetags_lcatbst
+      end
+    end
+  end
+  
+end # DataManager
+
+#==============================================================================
+# ■ RPG::BaseItem
+#==============================================================================
+
+class RPG::BaseItem
+  
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_accessor :catb_formula
+  
+  #--------------------------------------------------------------------------
+  # common cache: load_notetags_lcatbst
+  #--------------------------------------------------------------------------
+  def load_notetags_lcatbst
+    @catb_formula = []
+    @catb_formula_on = false
+    #---
+    self.note.split(/[\r\n]+/).each { |line|
+      case line
+      #---
+      when YSA::REGEXP::BASEITEM::CUSTOM_CATB_START_STR
+        @catb_formula.push($1.to_s)
+      #---
+      when YSA::REGEXP::BASEITEM::CUSTOM_CATB_START_ON
+        @catb_formula_on = true
+      when YSA::REGEXP::BASEITEM::CUSTOM_CATB_START_OFF
+        @catb_formula_on = false
+      #---
+      else
+        @catb_formula.push(line.to_s) if @catb_formula_on
+      end
+    } # self.note.split
+    #---
+    @catb_formula.push("COMMON ADD") if @catb_formula
+  end
+  
+end # RPG::BaseItem
+  
+#==============================================================================
+# 
+# ▼ End of File
+# 
+#==============================================================================

@@ -1,0 +1,31 @@
+# Overkill Snippet
+# This will call a common event when player kills an enemy and check over-damage.
+# Over-damage will be stored in OVER_DAMAGE_VARIABLE 
+# Enemy ID will be stored in ENEMY_ID_VARIABLE 
+# Free for all purposes.
+# Credit: Archeia Nessiah for the idea and publishing allowance.
+
+module Overkill
+  OVER_DAMAGE_VARIABLE = 100
+  ENEMY_ID_VARIABLE = 101 # ID in Database
+  COMMON_EVENT = 1
+end
+
+class Game_Battler < Game_BattlerBase
+  
+  alias overkill_item_apply item_apply
+  def item_apply(user, item)
+    original_hp = @hp
+    overkill_item_apply(user, item)
+    #---
+    return unless self.enemy?
+    return unless user.actor?
+    return unless @result.hp_damage > original_hp
+    #---
+    $game_variables[Overkill::OVER_DAMAGE_VARIABLE] = @result.hp_damage - original_hp
+    $game_variables[Overkill::ENEMY_ID_VARIABLE] = self.enemy.id
+    return unless $data_common_events[Overkill::COMMON_EVENT]
+    $game_temp.reserve_common_event(Overkill::COMMON_EVENT)
+  end
+  
+end # Game_Battler

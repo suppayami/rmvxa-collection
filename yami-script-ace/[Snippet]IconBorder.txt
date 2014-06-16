@@ -1,0 +1,21 @@
+# Automatically draw border for all icons.
+# Plug and play, change border icon index below.
+# Free for all using purposes.
+# Can credit or not ~
+
+module Yami
+  BORDER_ICON = 16
+end
+
+class Window_Base < Window
+  
+  alias yami_icon_border_draw_icon draw_icon
+  def draw_icon(icon_index, x, y, enabled = true)
+    bitmap = Cache.system("Iconset")
+    border_index = Yami::BORDER_ICON
+    rect = Rect.new(border_index % 16 * 24, border_index / 16 * 24, 24, 24)
+    contents.blt(x, y, bitmap, rect, enabled ? 255 : translucent_alpha)
+    yami_icon_border_draw_icon(icon_index, x, y, enabled)
+  end
+  
+end

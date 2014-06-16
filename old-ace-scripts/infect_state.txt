@@ -1,0 +1,214 @@
+#==============================================================================
+# 
+# Å• YSA Battle Add-On: Infective State
+# -- Last Updated: 2011.12.24
+# -- Level: Easy
+# -- Requires: none
+# 
+#==============================================================================
+
+$imported = {} if $imported.nil?
+$imported["YSA-InfectiveState"] = true
+
+#==============================================================================
+# Å• Updates
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2011.12.24 - Started Script and Finished.
+# 
+#==============================================================================
+# Å• Introduction
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script will make a state becomes infective, which like a virus, it will 
+# infect other battlers.
+# 
+#==============================================================================
+# Å• Instructions
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# To install this script, open up your script editor and copy/paste this script
+# to an open slot below Å• Materials/ëfçﬁ but above Å• Main. Remember to save.
+# 
+# -----------------------------------------------------------------------------
+# State Notetags - These notetags go in the state notebox in the database.
+# -----------------------------------------------------------------------------
+# <infect ally: x, y>
+# This state will infect after x turns, and will add state y to infected unit.
+#
+# <infect enemy: x, y>
+# This state will infect after x turns, and will add state y to infected unit.
+# 
+#==============================================================================
+# Å• Compatibility
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script is made strictly for RPG Maker VX Ace. It is highly unlikely that
+# it will run with RPG Maker VX without adjusting.
+# 
+#==============================================================================
+
+#==============================================================================
+# Å• Editting anything past this point may potentially result in causing
+# computer damage, incontinence, explosion of user's head, coma, death, and/or
+# halitosis so edit at your own risk.
+#==============================================================================
+
+module YSA
+  module REGEXP
+  module STATE
+    
+  INFECT_ALLY = /<(?:INFECT_ALLY|infect ally):[ ](\d+)?,[ ](\d+)?>/i
+	INFECT_ENEMY = /<(?:INFECT_ENEMY|infect enemy):[ ](\d+)?,[ ](\d+)?>/i
+    
+  end # STATE
+  end # REGEXP
+end # YSA
+
+#==============================================================================
+# Å° DataManager
+#==============================================================================
+
+module DataManager
+  
+  #--------------------------------------------------------------------------
+  # alias method: load_database
+  #--------------------------------------------------------------------------
+  class <<self; alias load_database_infst load_database; end
+  def self.load_database
+    load_database_infst
+    load_notetags_infst
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: load_notetags_infst
+  #--------------------------------------------------------------------------
+  def self.load_notetags_infst
+    groups = [$data_states]
+    for group in groups
+      for obj in group
+        next if obj.nil?
+        obj.load_notetags_infst
+      end
+    end
+  end
+  
+end # DataManager
+
+#==============================================================================
+# Å° RPG::State
+#==============================================================================
+
+class RPG::State < RPG::BaseItem
+  
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_accessor :infect_turn_a
+  attr_accessor :infect_turn_e
+  attr_accessor :infect_state_a
+  attr_accessor :infect_state_e
+  
+  #--------------------------------------------------------------------------
+  # common cache: load_notetags_staura
+  #--------------------------------------------------------------------------
+  def load_notetags_infst
+    #---
+    self.note.split(/[\r\n]+/).each { |line|
+      case line
+      #---
+      when YSA::REGEXP::STATE::INFECT_ALLY
+        @infect_turn_a = $1.to_i
+        @infect_state_a = $2.to_i
+      when YSA::REGEXP::STATE::INFECT_ENEMY
+        @infect_turn_e = $1.to_i 
+        @infect_state_e = $2.to_i
+      end
+    } # self.note.split
+    #---
+  end
+  
+end # RPG::State
+
+#==============================================================================
+# Å° Game_Battler
+#==============================================================================
+
+class Game_Battler < Game_BattlerBase
+
+  #--------------------------------------------------------------------------
+  # alias method: add_state
+  #--------------------------------------------------------------------------
+  alias infect_add_state add_state
+  def add_state(state_id)
+    infect_add_state(state_id)
+    if $data_states[state_id].infect_turn_a || $data_states[state_id].infect_turn_e
+      @infect_turn_a = [] if @infect_turn_a == nil
+      @infect_turn_e = [] if @infect_turn_e == nil
+      @infect_turn_a[state_id] = $data_states[state_id].infect_turn_a
+      @infect_turn_e[state_id] = $data_states[state_id].infect_turn_e
+    end
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: remove_state
+  #--------------------------------------------------------------------------
+  alias infect_remove_state remove_state
+  def remove_state(state_id)
+    infect_remove_state(state_id)
+    @infect_turn_a[state_id] = nil if @infect_turn_a != nil
+    @infect_turn_e[state_id] = nil if @infect_turn_e != nil
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: on_turn_end
+  #--------------------------------------------------------------------------
+  alias infect_on_turn_end on_turn_end
+  def on_turn_end
+    infect_on_turn_end
+    update_state_infect
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: update_state_infect
+  #--------------------------------------------------------------------------
+  def update_state_infect
+    for state in states
+      if $data_states[state.id].infect_turn_a || $data_states[state.id].infect_turn_e
+        if $data_states[state.id].infect_turn_a
+          @infect_turn_a[state.id] -= 1
+          if @infect_turn_a[state.id] <= 0
+            shuffle = $game_party.members.dup
+            shuffle = shuffle.shuffle
+            for member in shuffle
+              next if member == nil
+              next if member.state?(state)
+              next if member.dead?
+              member.add_state(state.infect_state_a)
+            end
+            shuffle.clear
+            shuffle = nil
+          end
+        end
+        if $data_states[state.id].infect_turn_e
+          @infect_turn_e[state.id] -= 1 
+          if @infect_turn_e[state.id] <= 0
+            shuffle = $game_troop.members.dup
+            shuffle = shuffle.shuffle
+            for member in shuffle
+              next if member == nil
+              next if member.state?(state)
+              next if member.dead?
+              member.add_state(state.infect_state_e)
+            end
+            shuffle.clear
+            shuffle = nil
+          end
+        end
+      end
+    end
+  end
+  
+end # Game_Battler
+
+#==============================================================================
+# 
+# Å• End of File
+# 
+#==============================================================================

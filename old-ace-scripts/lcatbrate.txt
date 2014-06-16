@@ -1,0 +1,267 @@
+#==============================================================================
+# 
+# Å• YSA Battle Add-on: Lunatic CATB Rate
+# -- Last Updated: 2012.01.20
+# -- Level: Easy, Normal
+# -- Requires: 
+#       - YEA - Ace Battle Engine v1.15+
+#       - YSA Battle System: Classical ATB v1.03+
+# 
+#==============================================================================
+
+$imported = {} if $imported.nil?
+$imported["YSA-LunaticCATBRate"] = true
+
+#==============================================================================
+# Å• Updates
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2012.01.20 - Started Script and Finished.
+# 
+#==============================================================================
+# Å• Introduction
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script decide how much ATB Gauge will be filled at any value or rate.
+# 
+#==============================================================================
+# Å• Instructions
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# To install this script, open up your script editor and copy/paste this script
+# to an open slot below Å• Materials/ëfçﬁ but above Å• Main. Remember to save.
+# 
+#==============================================================================
+# Å• Compatibility
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# This script is made strictly for RPG Maker VX Ace. It is highly unlikely that
+# it will run with RPG Maker VX without adjusting.
+# 
+# This script requires Yanfly Engine Ace - Ace Battle Engine v1.15+ and the
+# script must be placed under Ace Battle Engine in the script listing.
+# 
+#==============================================================================
+
+class Game_Battler < Game_BattlerBase
+  
+  #--------------------------------------------------------------------------
+  # Åú Welcome to Lunatic Mode
+  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  # Lunatic CATB Rate Formulas calculates actors/enemies ATB rate. 
+  # Use the following notetag to assign the formulas to be used.
+  # NOTE: You can use this with Actor, Enemy, Equipment, Class or State.
+  # NOTE2: MAX_CATB_VALUE = 100000.0
+  # 
+  #     <custom catb rate: string>
+  #
+  # The formula <custom catb rate: common rate> will be used when you don't have
+  # any formulas are being used.
+  #
+  # You can use as many as you want formulas by using this notetag.
+  #
+  #     <custom catb rate>
+  #      string
+  #      string
+  #     </custom catb rate>
+  #
+  # All of the string information in between those two notetags will be
+  # stored the same way as the notetags shown before those. There is no
+  # difference between using either.
+  #--------------------------------------------------------------------------
+  
+  MAX_CATB_VALUE = 100000.0
+  
+  def lunatic_catb_rate_formula
+    formulas = []
+    formulas = self.actor.catb_rate + self.class.catb_rate if self.actor?
+    formulas = self.enemy.catb_rate if self.enemy?
+    value = real_gain_catb
+    value_percent = 100
+    if self.actor?
+      if self.equips
+        self.equips.each { |a| formulas += a.catb_rate if a } 
+      end
+      if self.skills
+        self.skills.each { |a| formulas += a.catb_rate if a }
+      end
+    end
+    self.states.each { |state| formulas += state.catb_rate }
+    for formula in formulas
+      case formula.upcase
+      
+      #----------------------------------------------------------------------
+      # ATB Rate Formula No.1: BOOST PERCENT
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      # Boost ATB rate by x percents.
+      # 
+      # Formula notetag:
+      #   <custom catb rate: boost percent x%>
+      #----------------------------------------------------------------------
+      when /BOOST PERCENT[ ](\d+)([%Åì])/i
+        value_percent += $1.to_i
+        
+      #----------------------------------------------------------------------
+      # ATB Rate Formula No.2: REDUCE PERCENT
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      # Reduce ATB rate by x percents.
+      # 
+      # Formula notetag:
+      #   <custom catb rate: reduce percent x%>
+      #----------------------------------------------------------------------
+      when /REDUCE PERCENT[ ](\d+)([%Åì])/i
+        value_percent = [value_percent - $1.to_i, 1].max
+        
+      #----------------------------------------------------------------------
+      # ATB Rate Formula No.3: SET PERCENT
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      # Set ATB rate to x percents.
+      # 
+      # Formula notetag:
+      #   <custom catb rate: set percent x%>
+      #----------------------------------------------------------------------
+      when /SET PERCENT[ ](\d+)([%Åì])/i
+        value_percent = [$1.to_i, 1].max
+        
+      #----------------------------------------------------------------------
+      # ATB Rate Formula No.4: SET VALUE
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      # Set base ATB filled speed to x.
+      # 
+      # Formula notetag:
+      #   <custom catb rate: set value x>
+      #----------------------------------------------------------------------
+      when /SET VALUE[ ](\d+)/i
+        value = [$1.to_i, 1].max
+        
+      #----------------------------------------------------------------------
+      # ATB Rate Formula No.5: ADD VALUE
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      # Increase base ATB filled speed by x.
+      # 
+      # Formula notetag:
+      #   <custom catb rate: add value x>
+      #----------------------------------------------------------------------
+      when /ADD VALUE[ ](\d+)/i
+        value += $1.to_i
+        
+      #----------------------------------------------------------------------
+      # ATB Rate Formula No.6: DEC VALUE
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      # Decrease base ATB filled speed by x.
+      # 
+      # Formula notetag:
+      #   <custom catb rate: dec value x>
+      #----------------------------------------------------------------------
+      when /DEC VALUE[ ](\d+)/i
+        value = [value - $1.to_i, 1].max
+        
+      #----------------------------------------------------------------------
+      # ATB Starter Formula Default: COMMON RATE
+      #----------------------------------------------------------------------
+      when /COMMON RATE/i
+        # Do nothing
+        
+      #----------------------------------------------------------------------
+      # Stop editting past this point.
+      #----------------------------------------------------------------------
+      end # End case
+    end # End for
+    
+    #----------------------------------------------------------------------
+    # Return value.
+    #----------------------------------------------------------------------
+    return value * value_percent / 100
+    
+  end # End def
+  
+end # Game_Battler
+
+#==============================================================================
+# Å• Editting anything past this point may potentially result in causing
+# computer damage, incontinence, explosion of user's head, coma, death, and/or
+# halitosis so edit at your own risk.
+#==============================================================================
+
+module YSA
+  module REGEXP
+  module BASEITEM
+    
+    CUSTOM_CATB_RATE_STR = /<(?:CUSTOM_CATB_RATE|custom catb rate):[ ](.*)>/i
+    CUSTOM_CATB_RATE_ON  = /<(?:CUSTOM_CATB_RATE|custom catb rate)>/i
+    CUSTOM_CATB_RATE_OFF = /<\/(?:CUSTOM_CATB_RATE|custom catb rate)>/i
+    
+  end # BASEITEM
+  end # REGEXP
+end # YSA
+
+#==============================================================================
+# Å° DataManager
+#==============================================================================
+
+module DataManager
+  
+  #--------------------------------------------------------------------------
+  # alias method: load_database
+  #--------------------------------------------------------------------------
+  class <<self; alias load_database_lcatbra load_database; end
+  def self.load_database
+    load_database_lcatbra
+    load_notetags_lcatbra
+  end
+  
+  #--------------------------------------------------------------------------
+  # new method: load_notetags_lcatbra
+  #--------------------------------------------------------------------------
+  def self.load_notetags_lcatbra
+    groups = [$data_actors, $data_classes, $data_enemies, $data_skills, $data_weapons, $data_armors, $data_states]
+    for group in groups
+      for obj in group
+        next if obj.nil?
+        obj.load_notetags_lcatbra
+      end
+    end
+  end
+  
+end # DataManager
+
+#==============================================================================
+# Å° RPG::BaseItem
+#==============================================================================
+
+class RPG::BaseItem
+  
+  #--------------------------------------------------------------------------
+  # public instance variables
+  #--------------------------------------------------------------------------
+  attr_accessor :catb_rate
+  
+  #--------------------------------------------------------------------------
+  # common cache: load_notetags_lcatbra
+  #--------------------------------------------------------------------------
+  def load_notetags_lcatbra
+    @catb_rate = []
+    @catb_rate_on = false
+    #---
+    self.note.split(/[\r\n]+/).each { |line|
+      case line
+      #---
+      when YSA::REGEXP::BASEITEM::CUSTOM_CATB_RATE_STR
+        @catb_rate.push($1.to_s)
+      #---
+      when YSA::REGEXP::BASEITEM::CUSTOM_CATB_RATE_ON
+        @catb_rate_on = true
+      when YSA::REGEXP::BASEITEM::CUSTOM_CATB_RATE_OFF
+        @catb_rate_on = false
+      #---
+      else
+        @catb_rate.push(line.to_s) if @catb_rate_on
+      end
+    } # self.note.split
+    #---
+    @catb_rate.push("COMMON RATE") if @catb_rate == []
+  end
+  
+end # RPG::BaseItem
+  
+#==============================================================================
+# 
+# Å• End of File
+# 
+#==============================================================================
