@@ -307,6 +307,7 @@ class Game_Battler < Game_BattlerBase
     else
       battle_luna_dp_item_apply(user, item)
     end    
+    @result.restore_damage
     make_miss_popups(user, item)
     make_damage_popups(user)
   end
@@ -738,3 +739,58 @@ class Window_BattleHelp < Window_Help
   
 end # Window_BattleHelp
 end
+
+#==============================================================================
+# ■ Sprite_Battler
+#==============================================================================
+
+class Sprite_Battler < Sprite_Base
+  
+  #--------------------------------------------------------------------------
+  # alias method: create_new_popup
+  # Compatible with YEA - Battle Engine.
+  #--------------------------------------------------------------------------
+  if $imported["YEA-BattleEngine"] && !$imported["YES-BattlePopup"]
+  alias battle_luna_yea_create_new_popup create_new_popup
+  def create_new_popup(value, rules, flags)
+    battle_luna_yea_create_new_popup(value, rules, flags)
+    @popups.each { |popup| 
+      popup.viewport = nil
+      popup.z = @battler.screen_z + 1000
+    }
+  end
+  end
+  
+end # Sprite_Battler
+
+#==============================================================================
+# ■ Game_ActionResult
+#==============================================================================
+
+class Game_ActionResult
+  
+  #--------------------------------------------------------------------------
+  # alias method: clear_stored_damage
+  #--------------------------------------------------------------------------
+  alias battle_luna_yea_clear_stored_damage clear_stored_damage if $imported["YEA-BattleEngine"]
+  def clear_stored_damage
+    battle_luna_yea_clear_stored_damage unless $imported["YES-BattlePopup"]
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: store_damage
+  #--------------------------------------------------------------------------
+  alias battle_luna_yea_store_damage store_damage if $imported["YEA-BattleEngine"]
+  def store_damage
+    battle_luna_yea_store_damage unless $imported["YES-BattlePopup"]
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: restore_damage
+  #--------------------------------------------------------------------------
+  alias battle_luna_yea_restore_damage restore_damage if $imported["YEA-BattleEngine"]
+  def restore_damage
+    battle_luna_yea_restore_damage unless $imported["YES-BattlePopup"]
+  end
+  
+end # Game_ActionResult
