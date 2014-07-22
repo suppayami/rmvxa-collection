@@ -1,7 +1,7 @@
 #==============================================================================
 # 
 # ▼ Yami Engine Symphony - Battle Symphony
-# -- Version: 1.16c (2014.03.24)
+# -- Version: 1.16d (2014.07.22)
 # -- Level: Easy, Normal, Hard, Very Hard
 # -- Requires: n/a
 # 
@@ -13,6 +13,7 @@ $imported["YES-BattleSymphony"] = true
 #==============================================================================
 # ▼ Updates
 # =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2014.07.22 - Release Build 1.16d.
 # 2014.03.24 - Release Build 1.16c.
 # 2014.02.26 - Release Build 1.16b.
 # 2014.01.20 - Release Build 1.16.
@@ -2962,6 +2963,7 @@ class Game_Battler < Game_BattlerBase
   #--------------------------------------------------------------------------
   alias bes_item_cnt item_cnt
   def item_cnt(user, item)
+    return 0 unless movable?
     return 0 unless @result.check_counter?
     return bes_item_cnt(user, item)
   end
@@ -2971,6 +2973,7 @@ class Game_Battler < Game_BattlerBase
   #--------------------------------------------------------------------------
   alias bes_item_mrf item_mrf
   def item_mrf(user, item)
+    return 0 unless movable?
     return 0 unless @result.check_reflection?
     return 0 if @magic_reflection
     return bes_item_mrf(user, item)
