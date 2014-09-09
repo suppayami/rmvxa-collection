@@ -11,7 +11,7 @@
 # Author: Dr.Yami
 
 class Game_Event < Game_Character
-
+  
   def note
     begin
       data = []
@@ -24,7 +24,7 @@ class Game_Event < Game_Character
       return []
     end
   end
-
+  
   def event_height
     note.each do |line|
       if line =~ /big event:[ ]*(\d+)[ ]+(\d+)/i
@@ -33,7 +33,7 @@ class Game_Event < Game_Character
     end
     return 0
   end
-
+  
   def event_width
     note.each do |line|
       if line =~ /big event:[ ]*(\d+)[ ]+(\d+)/i
@@ -42,10 +42,10 @@ class Game_Event < Game_Character
     end
     return 0
   end
-
+  
   def pos?(x, y)
-    (x <= @x + event_width) && (x >= @x) &&
-      (y >= @y - event_height) && (y <= @y)
+    (x <= @x + event_width / 2) && (x >= @x - event_width / 2) && 
+      (y >= @y - event_height / 2) && (y <= @y + event_height / 2)
   end
-
+  
 end
