@@ -1,7 +1,7 @@
 #==============================================================================
 # 
 # ▼ Yami Engine Symphony - Battle Symphony
-# -- Version: 1.16d (2014.07.22)
+# -- Version: 1.16e (2014.09.11)
 # -- Level: Easy, Normal, Hard, Very Hard
 # -- Requires: n/a
 # 
@@ -13,6 +13,7 @@ $imported["YES-BattleSymphony"] = true
 #==============================================================================
 # ▼ Updates
 # =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# 2014.09.11 - Release Build 1.16e.
 # 2014.07.22 - Release Build 1.16d.
 # 2014.03.24 - Release Build 1.16c.
 # 2014.02.26 - Release Build 1.16b.
@@ -2943,6 +2944,14 @@ end # Game_ActionResult
 class Game_Battler < Game_BattlerBase
   
   #--------------------------------------------------------------------------
+  # new method: force_make_actions
+  #--------------------------------------------------------------------------
+  def force_make_actions
+    clear_actions
+    @actions = Array.new(make_action_times) { Game_Action.new(self) }
+  end
+  
+  #--------------------------------------------------------------------------
   # new method: backup_actions
   #--------------------------------------------------------------------------
   def backup_actions
@@ -2963,7 +2972,7 @@ class Game_Battler < Game_BattlerBase
   #--------------------------------------------------------------------------
   alias bes_item_cnt item_cnt
   def item_cnt(user, item)
-    return 0 unless movable?
+    return 0 if !movable? && !SYMPHONY::Fixes::ALWAYS_COUNTER
     return 0 unless @result.check_counter?
     return bes_item_cnt(user, item)
   end
@@ -2973,7 +2982,7 @@ class Game_Battler < Game_BattlerBase
   #--------------------------------------------------------------------------
   alias bes_item_mrf item_mrf
   def item_mrf(user, item)
-    return 0 unless movable?
+    return 0 if !movable? && !SYMPHONY::Fixes::ALWAYS_COUNTER
     return 0 unless @result.check_reflection?
     return 0 if @magic_reflection
     return bes_item_mrf(user, item)
@@ -3083,7 +3092,6 @@ class Game_Battler < Game_BattlerBase
   def create_icon(symbol, icon_id = 0)
     delete_icon(symbol)
     #---
-    icon = Sprite_Object.new(self.sprite.viewport)
     case symbol
     when :weapon1
       object = self.weapons[0]
@@ -3099,6 +3107,7 @@ class Game_Battler < Game_BattlerBase
       icon_id = object.nil? ? nil : object.icon_index
     else; end
     return if icon_id.nil? || icon_id <= 0
+    icon = Sprite_Object.new(self.sprite.viewport)
     icon.set_icon(icon_id)
     icon.set_battler(self)
     #---
@@ -3195,6 +3204,15 @@ class Game_Battler < Game_BattlerBase
   #--------------------------------------------------------------------------
   def dual_attack?
     self.actor? && self.current_action.attack? && self.dual_wield? && self.weapons.size > 1
+  end
+  
+  #--------------------------------------------------------------------------
+  # alias method: on_battle_end
+  #--------------------------------------------------------------------------
+  alias bes_on_battle_end on_battle_end
+  def on_battle_end
+    bes_on_battle_end
+    clear_icons
   end
   
 end # Game_Battler
@@ -3360,7 +3378,7 @@ class Scene_Battle < Scene_Base
     #---
     @subject.backup_actions
     #---
-    @subject.make_actions
+    @subject.force_make_actions
     @subject.current_action.set_attack
     #---
     actions_list = SYMPHONY::DEFAULT_ACTIONS::COUNTER_ACTION
@@ -3390,7 +3408,7 @@ class Scene_Battle < Scene_Base
     #---
     @subject.backup_actions
     #---
-    @subject.make_actions
+    @subject.force_make_actions
     if item.is_a?(RPG::Skill); @subject.current_action.set_skill(item.id)
       else; @subject.current_action.set_item(item.id); end
     #---
