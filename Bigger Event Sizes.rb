@@ -44,8 +44,13 @@ class Game_Event < Game_Character
   end
   
   def pos?(x, y)
-    (x <= @x + event_width / 2) && (x >= @x - event_width / 2) && 
-      (y >= @y - event_height / 2) && (y <= @y + event_height / 2)
+    if event_width % 2 == 0
+      in_x = (x <= @x + event_width / 2) && (x >= @x - event_width / 2)
+    else
+      in_x = (x <= @x + event_width / 2) && (x >= @x - event_width / 2 - 1)
+    end
+    in_y = (y >= @y - event_height) && (y <= @y)
+    in_x && in_y      
   end
   
 end
