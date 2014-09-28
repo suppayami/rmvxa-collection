@@ -128,6 +128,11 @@ module SYMPHONY
     # remain alive even their HP reach zero.
     # Auto Turn-off Immortal will be push to Finish Actions.
     AUTO_IMMORTAL_OFF = true
+    
+    # Set this to true to make unmovable character can counter and reflect.
+    # In default RGSS3, character can still counter and reflect even if
+    # he is stunned or paralyzed.
+    ALWAYS_COUNTER = true
   end # Fixes
 end # SYMPHONY
 
